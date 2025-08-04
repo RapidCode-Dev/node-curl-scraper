@@ -540,6 +540,7 @@ export class CurlImpersonate {
     let bodyLines: string[] = [];
     let inHeaders = true;
     let statusLine = '';
+    let foundHttpStatus = false;
     
     // First pass: find the status line and parse headers
     for (let i = 0; i < lines.length; i++) {
@@ -553,6 +554,7 @@ export class CurlImpersonate {
       
       // Check if this is the HTTP status line (starts with HTTP/)
       if (line.startsWith('HTTP/')) {
+        foundHttpStatus = true;
         // This is the HTTP status line, next lines are headers
         continue;
       }
@@ -616,6 +618,38 @@ export class CurlImpersonate {
     
     // Parse curl write format: http_code|http_version|size_download|time_total|url_effective
     const [statusCode, httpVersion, size, timeTotal, effectiveUrl] = statusLine.split('|');
+    
+    // If we found HTTP status line, we need to clean up the body
+    if (foundHttpStatus) {
+      // Find the first empty line after HTTP headers and extract only the content after it
+      let bodyStartIndex = -1;
+      for (let i = 0; i < lines.length; i++) {
+        if (lines[i].trim() === '') {
+          bodyStartIndex = i + 1;
+          break;
+        }
+      }
+      
+      if (bodyStartIndex !== -1) {
+        // Extract only the content after the empty line (which separates headers from body)
+        bodyLines = lines.slice(bodyStartIndex);
+        
+        // Remove the curl status line from the end if it exists
+        if (bodyLines.length > 0) {
+          const lastLine = bodyLines[bodyLines.length - 1];
+          if (lastLine.match(/^[0-9]{3}\|[0-9]+\|[0-9]+\|[0-9.]+\|/)) {
+            bodyLines = bodyLines.slice(0, -1);
+          } else {
+            // Check if the curl status line is appended to the last line
+            const match = lastLine.match(/(.*?)([0-9]{3}\|[0-9]+\|[0-9]+\|[0-9.]+\|.+)$/);
+            if (match) {
+              const [, bodyContent, statusLine] = match;
+              bodyLines[bodyLines.length - 1] = bodyContent;
+            }
+          }
+        }
+      }
+    }
     
     // Extract body
     const body = bodyLines.join('\n');

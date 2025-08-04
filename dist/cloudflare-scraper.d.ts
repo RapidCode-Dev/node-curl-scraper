@@ -1,4 +1,24 @@
 import { BrowserFingerprint, RequestOptions, HttpResponse } from './types';
+export interface HtmlParseOptions {
+    encoding?: string;
+    normalizeWhitespace?: boolean;
+}
+export interface HtmlElement {
+    tagName: string;
+    id?: string;
+    className?: string;
+    textContent: string;
+    innerHTML: string;
+    attributes: Record<string, string>;
+    children: HtmlElement[];
+}
+export interface HtmlParseResult {
+    elements: HtmlElement[];
+    getElementById: (id: string) => HtmlElement | null;
+    querySelector: (selector: string) => HtmlElement | null;
+    querySelectorAll: (selector: string) => HtmlElement[];
+    getScriptData: (scriptId?: string) => any;
+}
 export declare class CloudflareError extends Error {
     code: 'CF_CHALLENGE' | 'CF_BANNED' | 'CF_TIMEOUT' | 'CF_JS_CHALLENGE' | 'CF_CAPTCHA';
     response?: HttpResponse | undefined;
@@ -150,5 +170,44 @@ export declare class CloudflareScraper {
      * Restore session cookies from persistence (backward compatibility)
      */
     restoreSessionCookies(cookies: Record<string, string>, sessionId?: string): void;
+    /**
+     * Check if response is HTML
+     */
+    isHtmlResponse(response: HttpResponse): boolean;
+    /**
+     * Parse HTML response and return structured data
+     */
+    parseHtml(response: HttpResponse, options?: HtmlParseOptions): HtmlParseResult;
+    /**
+     * Convert node-html-parser node to our HtmlElement interface
+     */
+    private convertNodeToElements;
+    /**
+     * Get element by ID using node-html-parser
+     */
+    private getElementById;
+    /**
+     * Query selector using node-html-parser
+     */
+    private querySelector;
+    /**
+     * Query selector all using node-html-parser
+     */
+    private querySelectorAll;
+    /**
+     * Get script data from specific script tag
+     */
+    private getScriptData;
+    /**
+     * Make request and parse HTML response
+     */
+    requestHtml(url: string, options?: RequestOptions, sessionId?: string): Promise<{
+        response: HttpResponse;
+        html: HtmlParseResult;
+    }>;
+    /**
+     * Make request and extract data from specific script tag
+     */
+    requestScriptData(url: string, scriptId?: string, options?: RequestOptions, sessionId?: string): Promise<any>;
 }
 //# sourceMappingURL=cloudflare-scraper.d.ts.map

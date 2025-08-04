@@ -472,6 +472,8 @@ class CurlImpersonate {
         let bodyLines = [];
         let inHeaders = true;
         let statusLine = '';
+        let foundHttpStatus = false;
+        // First pass: find the status line and parse headers
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i];
             // Check if this is the curl status line (starts with 3 digits followed by |)
@@ -481,6 +483,7 @@ class CurlImpersonate {
             }
             // Check if this is the HTTP status line (starts with HTTP/)
             if (line.startsWith('HTTP/')) {
+                foundHttpStatus = true;
                 // This is the HTTP status line, next lines are headers
                 continue;
             }
@@ -506,33 +509,31 @@ class CurlImpersonate {
                 bodyLines.push(line);
             }
         }
-        // If no status line found in headers, look for it in the last line
+        // If no status line found in headers, look for it from the end of the response
         if (!statusLine && lines.length > 0) {
-            const lastLine = lines[lines.length - 1];
-            // Look for the pattern: } followed by 3 digits, then |, then 1-2 digits, then |, then digits, then |, then decimal, then |, then URL
-            const match = lastLine.match(/}([0-9]{3})\|([0-9]+)\|([0-9]+)\|([0-9.]+)\|(.+)$/);
-            if (match) {
-                // Extract the status parts
-                const [, statusCode, httpVersion, size, timeTotal, effectiveUrl] = match;
-                statusLine = `${statusCode}|${httpVersion}|${size}|${timeTotal}|${effectiveUrl}`;
-                // Extract the body (everything before the status)
-                const statusStart = lastLine.lastIndexOf(statusCode);
-                const bodyPart = lastLine.substring(0, statusStart);
-                if (bodyPart) {
-                    bodyLines = [bodyPart];
-                }
-            }
-            else {
-                // Try alternative pattern without the } requirement
-                const altMatch = lastLine.match(/([0-9]{3})\|([0-9]+)\|([0-9]+)\|([0-9.]+)\|(.+)$/);
-                if (altMatch) {
-                    const [, statusCode, httpVersion, size, timeTotal, effectiveUrl] = altMatch;
+            // Search from the end of the response for the status line pattern
+            for (let i = lines.length - 1; i >= 0; i--) {
+                const line = lines[i];
+                // Look for the status line pattern: 3 digits|1-2 digits|digits|decimal|URL
+                const match = line.match(/([0-9]{3})\|([0-9]+)\|([0-9]+)\|([0-9.]+)\|(.+)$/);
+                if (match) {
+                    const [, statusCode, httpVersion, size, timeTotal, effectiveUrl] = match;
                     statusLine = `${statusCode}|${httpVersion}|${size}|${timeTotal}|${effectiveUrl}`;
-                    // Extract the body (everything before the status)
-                    const bodyPart = lastLine.substring(0, lastLine.indexOf(statusCode));
-                    if (bodyPart) {
-                        bodyLines = [bodyPart];
+                    // Extract the body (everything except the status line)
+                    const statusStart = line.lastIndexOf(statusCode);
+                    const bodyPart = line.substring(0, statusStart);
+                    // Reconstruct the body: all lines except the one containing the status line
+                    bodyLines = [];
+                    for (let j = 0; j < lines.length; j++) {
+                        if (j !== i) {
+                            bodyLines.push(lines[j]);
+                        }
+                        else if (bodyPart) {
+                            // Add the part before the status line
+                            bodyLines.push(bodyPart);
+                        }
                     }
+                    break;
                 }
             }
         }
@@ -541,6 +542,36 @@ class CurlImpersonate {
         }
         // Parse curl write format: http_code|http_version|size_download|time_total|url_effective
         const [statusCode, httpVersion, size, timeTotal, effectiveUrl] = statusLine.split('|');
+        // If we found HTTP status line, we need to clean up the body
+        if (foundHttpStatus) {
+            // Find the first empty line after HTTP headers and extract only the content after it
+            let bodyStartIndex = -1;
+            for (let i = 0; i < lines.length; i++) {
+                if (lines[i].trim() === '') {
+                    bodyStartIndex = i + 1;
+                    break;
+                }
+            }
+            if (bodyStartIndex !== -1) {
+                // Extract only the content after the empty line (which separates headers from body)
+                bodyLines = lines.slice(bodyStartIndex);
+                // Remove the curl status line from the end if it exists
+                if (bodyLines.length > 0) {
+                    const lastLine = bodyLines[bodyLines.length - 1];
+                    if (lastLine.match(/^[0-9]{3}\|[0-9]+\|[0-9]+\|[0-9.]+\|/)) {
+                        bodyLines = bodyLines.slice(0, -1);
+                    }
+                    else {
+                        // Check if the curl status line is appended to the last line
+                        const match = lastLine.match(/(.*?)([0-9]{3}\|[0-9]+\|[0-9]+\|[0-9.]+\|.+)$/);
+                        if (match) {
+                            const [, bodyContent, statusLine] = match;
+                            bodyLines[bodyLines.length - 1] = bodyContent;
+                        }
+                    }
+                }
+            }
+        }
         // Extract body
         const body = bodyLines.join('\n');
         // Set default content-type if not present

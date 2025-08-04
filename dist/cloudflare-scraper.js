@@ -4,6 +4,7 @@ exports.CloudflareScraper = exports.ProxyError = exports.CloudflareError = void 
 const curl_impersonate_1 = require("./curl-impersonate");
 const debug_1 = require("./debug");
 const crypto_1 = require("crypto");
+const node_html_parser_1 = require("node-html-parser");
 // Cloudflare-specific error types
 class CloudflareError extends Error {
     constructor(message, code, response, retryable = true) {
@@ -109,6 +110,7 @@ class CloudflareScraper {
         let session = this.getSession(sessionId);
         let attempts = 0;
         let lastError;
+        let allErrors = [];
         // Debug logging
         debug_1.debugLogger.logCloudflareRequest(url, options, session.id);
         while (attempts < (this.config.session.maxRetries || 3)) {
@@ -156,6 +158,12 @@ class CloudflareScraper {
             catch (error) {
                 lastError = error;
                 session.errorCount++;
+                // Record this error attempt
+                allErrors.push({
+                    attempt: attempts,
+                    error: error,
+                    timestamp: Date.now()
+                });
                 // Debug logging
                 debug_1.debugLogger.logCloudflareError(error, session.id);
                 // Handle different error types
@@ -183,47 +191,35 @@ class CloudflareScraper {
                 break;
             }
         }
-        throw lastError || new Error('Max retries exceeded');
+        // Create detailed error message with all collected errors
+        const errorDetails = allErrors.map(({ attempt, error, timestamp }) => {
+            const timeStr = new Date(timestamp).toISOString();
+            return `Attempt ${attempt} (${timeStr}): ${error.message}`;
+        }).join('\n');
+        // Log retry summary for debugging
+        debug_1.debugLogger.logRetrySummary(allErrors, session.id);
+        const maxRetriesError = new Error(`Max retries exceeded (${attempts} attempts).\n\nError details:\n${errorDetails}`);
+        maxRetriesError.name = 'MaxRetriesExceededError';
+        maxRetriesError.attempts = attempts;
+        maxRetriesError.allErrors = allErrors;
+        maxRetriesError.lastError = lastError;
+        throw maxRetriesError;
     }
     /**
      * Check if response is a Cloudflare challenge
      */
     isCloudflareChallenge(response) {
-        const cfIndicators = [
-            'cloudflare',
-            'cf-ray',
-            'cf-cache-status',
-            'cf-request-id',
-            'challenge-platform',
-            'cf-browser-verification'
-        ];
-        const headers = Object.keys(response.headers).map(h => h.toLowerCase());
-        const body = response.body.toLowerCase();
-        return (response.statusCode === 403 ||
-            response.statusCode === 503 ||
-            response.statusCode === 429 ||
-            headers.some(h => cfIndicators.some(indicator => h.includes(indicator))) ||
-            body.includes('cloudflare') ||
-            body.includes('checking your browser') ||
-            body.includes('ddos protection') ||
-            body.includes('please wait while we verify') ||
-            body.includes('challenge-form'));
+        // DISABLED: We don't know exactly what Cloudflare challenges look like yet
+        // Only implement when we have definitive examples
+        return false;
     }
     /**
      * Handle Cloudflare challenge
      */
     handleCloudflareChallenge(response, session) {
-        const body = response.body.toLowerCase();
-        if (body.includes('captcha')) {
-            return new CloudflareError('Cloudflare captcha challenge detected', 'CF_CAPTCHA', response, false);
-        }
-        if (body.includes('javascript') || body.includes('js challenge')) {
-            return new CloudflareError('Cloudflare JavaScript challenge detected', 'CF_JS_CHALLENGE', response, true);
-        }
-        if (response.statusCode === 403) {
-            return new CloudflareError('Cloudflare banned this IP/fingerprint', 'CF_BANNED', response, true);
-        }
-        return new CloudflareError('Cloudflare challenge detected', 'CF_CHALLENGE', response, true);
+        // DISABLED: We don't know exactly what Cloudflare challenges look like yet
+        // Only implement when we have definitive examples
+        throw new CloudflareError('Cloudflare challenge detection disabled - implement when we have real examples', 'CF_CHALLENGE', response, false);
     }
     /**
      * Check if error is proxy-related
@@ -452,6 +448,141 @@ class CloudflareScraper {
     restoreSessionCookies(cookies, sessionId) {
         const session = this.getSession(sessionId);
         session.cookies = { ...cookies };
+    }
+    /**
+     * Check if response is HTML
+     */
+    isHtmlResponse(response) {
+        const contentType = response.headers['content-type'] || response.headers['Content-Type'] || '';
+        return contentType.includes('text/html') ||
+            response.body.toLowerCase().includes('<!doctype html') ||
+            response.body.toLowerCase().includes('<html');
+    }
+    /**
+     * Parse HTML response and return structured data
+     */
+    parseHtml(response, options = {}) {
+        if (!this.isHtmlResponse(response)) {
+            throw new Error('Response is not HTML');
+        }
+        const html = response.body;
+        const root = (0, node_html_parser_1.parse)(html);
+        return {
+            elements: this.convertNodeToElements(root),
+            getElementById: (id) => this.getElementById(root, id),
+            querySelector: (selector) => this.querySelector(root, selector),
+            querySelectorAll: (selector) => this.querySelectorAll(root, selector),
+            getScriptData: (scriptId) => this.getScriptData(root, scriptId)
+        };
+    }
+    /**
+     * Convert node-html-parser node to our HtmlElement interface
+     */
+    convertNodeToElements(node) {
+        const elements = [];
+        if (node.childNodes) {
+            for (const child of node.childNodes) {
+                if (child.nodeType === 1) { // Element node
+                    const element = {
+                        tagName: child.tagName?.toLowerCase() || '',
+                        id: child.id,
+                        className: child.attributes?.class || child.className,
+                        textContent: child.text,
+                        innerHTML: child.innerHTML,
+                        attributes: child.attributes || {},
+                        children: this.convertNodeToElements(child)
+                    };
+                    elements.push(element);
+                }
+            }
+        }
+        return elements;
+    }
+    /**
+     * Get element by ID using node-html-parser
+     */
+    getElementById(root, id) {
+        const element = root.getElementById(id);
+        if (!element)
+            return null;
+        return {
+            tagName: element.tagName?.toLowerCase() || '',
+            id: element.id,
+            className: element.attributes?.class || element.className,
+            textContent: element.text,
+            innerHTML: element.innerHTML,
+            attributes: element.attributes || {},
+            children: this.convertNodeToElements(element)
+        };
+    }
+    /**
+     * Query selector using node-html-parser
+     */
+    querySelector(root, selector) {
+        const element = root.querySelector(selector);
+        if (!element)
+            return null;
+        return {
+            tagName: element.tagName?.toLowerCase() || '',
+            id: element.id,
+            className: element.attributes?.class || element.className,
+            textContent: element.text,
+            innerHTML: element.innerHTML,
+            attributes: element.attributes || {},
+            children: this.convertNodeToElements(element)
+        };
+    }
+    /**
+     * Query selector all using node-html-parser
+     */
+    querySelectorAll(root, selector) {
+        const elements = root.querySelectorAll(selector);
+        return elements.map((element) => ({
+            tagName: element.tagName?.toLowerCase() || '',
+            id: element.id,
+            className: element.attributes?.class || element.className,
+            textContent: element.text,
+            innerHTML: element.innerHTML,
+            attributes: element.attributes || {},
+            children: this.convertNodeToElements(element)
+        }));
+    }
+    /**
+     * Get script data from specific script tag
+     */
+    getScriptData(root, scriptId) {
+        const targetId = scriptId || '__NEXT_DATA__';
+        const scriptElement = root.getElementById(targetId);
+        if (!scriptElement || scriptElement.tagName?.toLowerCase() !== 'script') {
+            return null;
+        }
+        try {
+            // Extract JSON content from script tag
+            const content = scriptElement.text || scriptElement.innerHTML;
+            return JSON.parse(content);
+        }
+        catch (error) {
+            debug_1.debugLogger.logCurlError(error, `Failed to parse script data from ${targetId}`);
+            return null;
+        }
+    }
+    /**
+     * Make request and parse HTML response
+     */
+    async requestHtml(url, options = {}, sessionId) {
+        const response = await this.request(url, options, sessionId);
+        if (!this.isHtmlResponse(response)) {
+            throw new Error('Response is not HTML');
+        }
+        const html = this.parseHtml(response);
+        return { response, html };
+    }
+    /**
+     * Make request and extract data from specific script tag
+     */
+    async requestScriptData(url, scriptId = '__NEXT_DATA__', options = {}, sessionId) {
+        const { html } = await this.requestHtml(url, options, sessionId);
+        return html.getScriptData(scriptId);
     }
 }
 exports.CloudflareScraper = CloudflareScraper;

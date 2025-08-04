@@ -108,7 +108,22 @@ class DebugLogger {
             return;
         console.log('\n❌ [DEBUG_CLOUDFLARE] ERROR');
         console.log('🆔 Session ID:', sessionId || 'none');
-        console.log('💥 Error:', this.formatData(error, 'error'));
+        console.log('💥 Error type:', error.constructor?.name || typeof error);
+        console.log('💥 Error message:', error.message || String(error));
+        console.log('💥 Error code:', error.code || 'N/A');
+        console.log('💥 Error stack:', error.stack || 'No stack trace');
+        // Log additional error properties if they exist
+        if (error.response) {
+            console.log('📡 Response status:', error.response.statusCode);
+            console.log('📡 Response headers:', this.formatData(error.response.headers, 'headers'));
+            console.log('📡 Response body preview:', error.response.body?.substring(0, 200) + (error.response.body?.length > 200 ? '...' : ''));
+        }
+        if (error.proxy) {
+            console.log('🌐 Proxy info:', this.formatData(error.proxy, 'proxy'));
+        }
+        if (error.retryable !== undefined) {
+            console.log('🔄 Retryable:', error.retryable);
+        }
         console.log('❌ [DEBUG_CLOUDFLARE] END ERROR\n');
     }
     // Session logging
@@ -241,6 +256,8 @@ class DebugLogger {
     }
     // Enhanced logging methods with file saving
     logRawCurlWithFile(args, output, error, context, url) {
+        if (!this.shouldLog('raw'))
+            return;
         this.logRawCurl(args, output, error);
         if (this.config.saveToFile && (output.trim() || error)) {
             const filename = context ? `${context}_curl_raw.txt` : 'curl_raw.txt';
@@ -249,6 +266,8 @@ class DebugLogger {
         }
     }
     logResponseWithFile(response, responseTime, context, saveToFile = true) {
+        if (!this.shouldLog('curl'))
+            return;
         this.logCurlResponse(response, responseTime);
         if (this.config.saveToFile && saveToFile && response.body && response.body.trim().length > 0) {
             // Only save files for important responses (login, API calls, or large responses)
@@ -292,6 +311,27 @@ class DebugLogger {
             }, null, 2);
             this.saveToFile(filename, content, 'request', url);
         }
+    }
+    logRetrySummary(allErrors, sessionId) {
+        if (!this.shouldLog('cloudflare'))
+            return;
+        console.log('\n📊 [DEBUG_CLOUDFLARE] RETRY SUMMARY');
+        console.log('🆔 Session ID:', sessionId || 'none');
+        console.log('📈 Total attempts:', allErrors.length);
+        allErrors.forEach(({ attempt, error, timestamp }, index) => {
+            const timeStr = new Date(timestamp).toISOString();
+            console.log(`\n🔄 Attempt ${attempt} (${timeStr}):`);
+            console.log(`   💥 Type: ${error.constructor?.name || typeof error}`);
+            console.log(`   💥 Message: ${error.message || String(error)}`);
+            console.log(`   💥 Code: ${error.code || 'N/A'}`);
+            if (error.response) {
+                console.log(`   📡 Status: ${error.response.statusCode}`);
+            }
+            if (error.proxy) {
+                console.log(`   🌐 Proxy: ${error.proxy.host}:${error.proxy.port}`);
+            }
+        });
+        console.log('\n📊 [DEBUG_CLOUDFLARE] END RETRY SUMMARY\n');
     }
 }
 exports.DebugLogger = DebugLogger;
