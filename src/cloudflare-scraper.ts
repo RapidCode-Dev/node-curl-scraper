@@ -108,6 +108,13 @@ export interface ScrapingSession {
   errorCount: number;
 }
 
+export interface CloudflareScraperConfig {
+    session?: Partial<SessionConfig>;
+    cloudflare?: Partial<CloudflareConfig>;
+    proxyRotation?: Partial<ProxyRotationConfig>;
+    binariesPath?: string;
+}
+
 export class CloudflareScraper {
   private curlImpersonate: CurlImpersonate;
   private sessions: Map<string, ScrapingSession> = new Map();
@@ -118,12 +125,7 @@ export class CloudflareScraper {
     proxyRotation: ProxyRotationConfig;
   };
 
-  constructor(config: {
-    session?: Partial<SessionConfig>;
-    cloudflare?: Partial<CloudflareConfig>;
-    proxyRotation?: Partial<ProxyRotationConfig>;
-    binariesPath?: string;
-  } = {}) {
+  constructor(config: CloudflareScraperConfig = {}) {
     this.config = {
       session: {
         enabled: true,

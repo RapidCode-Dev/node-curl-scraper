@@ -10,7 +10,8 @@ export type {
   ScrapingSession,
   HtmlParseOptions,
   HtmlElement,
-  HtmlParseResult
+  HtmlParseResult,
+  CloudflareScraperConfig
 } from './cloudflare-scraper';
 
 // Export debug utilities
