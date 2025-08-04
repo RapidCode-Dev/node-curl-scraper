@@ -127,7 +127,26 @@ export class DebugLogger {
     
     console.log('\n❌ [DEBUG_CLOUDFLARE] ERROR');
     console.log('🆔 Session ID:', sessionId || 'none');
-    console.log('💥 Error:', this.formatData(error, 'error'));
+    console.log('💥 Error type:', error.constructor?.name || typeof error);
+    console.log('💥 Error message:', error.message || String(error));
+    console.log('💥 Error code:', (error as any).code || 'N/A');
+    console.log('💥 Error stack:', error.stack || 'No stack trace');
+    
+    // Log additional error properties if they exist
+    if ((error as any).response) {
+      console.log('📡 Response status:', (error as any).response.statusCode);
+      console.log('📡 Response headers:', this.formatData((error as any).response.headers, 'headers'));
+      console.log('📡 Response body preview:', (error as any).response.body?.substring(0, 200) + ((error as any).response.body?.length > 200 ? '...' : ''));
+    }
+    
+    if ((error as any).proxy) {
+      console.log('🌐 Proxy info:', this.formatData((error as any).proxy, 'proxy'));
+    }
+    
+    if ((error as any).retryable !== undefined) {
+      console.log('🔄 Retryable:', (error as any).retryable);
+    }
+    
     console.log('❌ [DEBUG_CLOUDFLARE] END ERROR\n');
   }
 
@@ -271,6 +290,8 @@ export class DebugLogger {
 
   // Enhanced logging methods with file saving
   logRawCurlWithFile(args: string[], output: string, error?: string, context?: string, url?: string): void {
+    if (!this.shouldLog('raw')) return;
+    
     this.logRawCurl(args, output, error);
     
     if (this.config.saveToFile && (output.trim() || error)) {
@@ -281,6 +302,8 @@ export class DebugLogger {
   }
 
   logResponseWithFile(response: any, responseTime: number, context?: string, saveToFile: boolean = true): void {
+    if (!this.shouldLog('curl')) return;
+    
     this.logCurlResponse(response, responseTime);
     
     if (this.config.saveToFile && saveToFile && response.body && response.body.trim().length > 0) {
@@ -333,6 +356,32 @@ export class DebugLogger {
       }, null, 2);
       this.saveToFile(filename, content, 'request', url);
     }
+  }
+
+  logRetrySummary(allErrors: Array<{ attempt: number; error: Error; timestamp: number }>, sessionId?: string): void {
+    if (!this.shouldLog('cloudflare')) return;
+    
+    console.log('\n📊 [DEBUG_CLOUDFLARE] RETRY SUMMARY');
+    console.log('🆔 Session ID:', sessionId || 'none');
+    console.log('📈 Total attempts:', allErrors.length);
+    
+    allErrors.forEach(({ attempt, error, timestamp }, index) => {
+      const timeStr = new Date(timestamp).toISOString();
+      console.log(`\n🔄 Attempt ${attempt} (${timeStr}):`);
+      console.log(`   💥 Type: ${error.constructor?.name || typeof error}`);
+      console.log(`   💥 Message: ${error.message || String(error)}`);
+      console.log(`   💥 Code: ${(error as any).code || 'N/A'}`);
+      
+      if ((error as any).response) {
+        console.log(`   📡 Status: ${(error as any).response.statusCode}`);
+      }
+      
+      if ((error as any).proxy) {
+        console.log(`   🌐 Proxy: ${(error as any).proxy.host}:${(error as any).proxy.port}`);
+      }
+    });
+    
+    console.log('\n📊 [DEBUG_CLOUDFLARE] END RETRY SUMMARY\n');
   }
 }
 

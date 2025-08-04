@@ -17,7 +17,7 @@ describe('CloudflareScraper HTML Parsing', () => {
         statusCode: 200,
         statusText: 'OK',
         headers: { 'content-type': 'text/html; charset=utf-8' },
-        body: '<!DOCTYPE html><html><head><title>Test</title></head><body>Hello</body></html>',
+        body: '',
         url: 'https://example.com',
         responseTime: 100,
         size: 100

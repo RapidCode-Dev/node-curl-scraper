@@ -220,6 +220,7 @@ export class CloudflareScraper {
     let session = this.getSession(sessionId);
     let attempts = 0;
     let lastError: Error | undefined;
+    let allErrors: Array<{ attempt: number; error: Error; timestamp: number }> = [];
 
     // Debug logging
     debugLogger.logCloudflareRequest(url, options, session.id);
@@ -279,6 +280,13 @@ export class CloudflareScraper {
       } catch (error: any) {
         lastError = error;
         session.errorCount++;
+        
+        // Record this error attempt
+        allErrors.push({
+          attempt: attempts,
+          error: error,
+          timestamp: Date.now()
+        });
 
         // Debug logging
         debugLogger.logCloudflareError(error, session.id);
@@ -314,76 +322,44 @@ export class CloudflareScraper {
       }
     }
 
-    throw lastError || new Error('Max retries exceeded');
+    // Create detailed error message with all collected errors
+    const errorDetails = allErrors.map(({ attempt, error, timestamp }) => {
+      const timeStr = new Date(timestamp).toISOString();
+      return `Attempt ${attempt} (${timeStr}): ${error.message}`;
+    }).join('\n');
+
+    // Log retry summary for debugging
+    debugLogger.logRetrySummary(allErrors, session.id);
+
+    const maxRetriesError = new Error(`Max retries exceeded (${attempts} attempts).\n\nError details:\n${errorDetails}`);
+    maxRetriesError.name = 'MaxRetriesExceededError';
+    (maxRetriesError as any).attempts = attempts;
+    (maxRetriesError as any).allErrors = allErrors;
+    (maxRetriesError as any).lastError = lastError;
+    
+    throw maxRetriesError;
   }
 
   /**
    * Check if response is a Cloudflare challenge
    */
   private isCloudflareChallenge(response: HttpResponse): boolean {
-    const cfIndicators = [
-      'cloudflare',
-      'cf-ray',
-      'cf-cache-status',
-      'cf-request-id',
-      'challenge-platform',
-      'cf-browser-verification'
-    ];
-
-    const headers = Object.keys(response.headers).map(h => h.toLowerCase());
-    const body = response.body.toLowerCase();
-
-    return (
-      response.statusCode === 403 ||
-      response.statusCode === 503 ||
-      response.statusCode === 429 ||
-      headers.some(h => cfIndicators.some(indicator => h.includes(indicator))) ||
-      body.includes('cloudflare') ||
-      body.includes('checking your browser') ||
-      body.includes('ddos protection') ||
-      body.includes('please wait while we verify') ||
-      body.includes('challenge-form')
-    );
+    // DISABLED: We don't know exactly what Cloudflare challenges look like yet
+    // Only implement when we have definitive examples
+    return false;
   }
 
   /**
    * Handle Cloudflare challenge
    */
   private handleCloudflareChallenge(response: HttpResponse, session: ScrapingSession): CloudflareError {
-    const body = response.body.toLowerCase();
-    
-    if (body.includes('captcha')) {
-      return new CloudflareError(
-        'Cloudflare captcha challenge detected',
-        'CF_CAPTCHA',
-        response,
-        false
-      );
-    }
-    
-    if (body.includes('javascript') || body.includes('js challenge')) {
-      return new CloudflareError(
-        'Cloudflare JavaScript challenge detected',
-        'CF_JS_CHALLENGE',
-        response,
-        true
-      );
-    }
-    
-    if (response.statusCode === 403) {
-      return new CloudflareError(
-        'Cloudflare banned this IP/fingerprint',
-        'CF_BANNED',
-        response,
-        true
-      );
-    }
-    
-    return new CloudflareError(
-      'Cloudflare challenge detected',
+    // DISABLED: We don't know exactly what Cloudflare challenges look like yet
+    // Only implement when we have definitive examples
+    throw new CloudflareError(
+      'Cloudflare challenge detection disabled - implement when we have real examples',
       'CF_CHALLENGE',
       response,
-      true
+      false
     );
   }
 
