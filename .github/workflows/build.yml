@@ -1,4 +1,4 @@
-name: Build and Deploy
+name: Build, Test and Deploy
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
     branches: [ main, master ]
 
 jobs:
-  build:
+  test-and-build:
     runs-on: ubuntu-latest
 
     strategy:
@@ -26,10 +26,14 @@ jobs:
     - name: Install dependencies
       run: npm ci
     
+    - name: Run tests
+      run: npm test
+    
     - name: Build TypeScript
       run: npm run build
     
-    - name: Commit dist folder
+    - name: Commit dist folder (only on main/master)
+      if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
       run: |
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
