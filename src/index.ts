@@ -3,7 +3,15 @@ export { CurlImpersonate } from './curl-impersonate';
 
 // Export the Cloudflare wrapper
 export { CloudflareScraper, CloudflareError, ProxyError } from './cloudflare-scraper';
-export type { SessionConfig, CloudflareConfig, ProxyRotationConfig, ScrapingSession } from './cloudflare-scraper';
+export type { 
+  SessionConfig, 
+  CloudflareConfig, 
+  ProxyRotationConfig, 
+  ScrapingSession,
+  HtmlParseOptions,
+  HtmlElement,
+  HtmlParseResult
+} from './cloudflare-scraper';
 
 // Export debug utilities
 export { debugLogger } from './debug';

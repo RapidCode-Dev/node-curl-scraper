@@ -7,6 +7,31 @@ import {
   CurlError
 } from './types';
 import { randomUUID } from 'crypto';
+import { parse } from 'node-html-parser';
+
+// HTML parsing utilities
+export interface HtmlParseOptions {
+  encoding?: string;
+  normalizeWhitespace?: boolean;
+}
+
+export interface HtmlElement {
+  tagName: string;
+  id?: string;
+  className?: string;
+  textContent: string;
+  innerHTML: string;
+  attributes: Record<string, string>;
+  children: HtmlElement[];
+}
+
+export interface HtmlParseResult {
+  elements: HtmlElement[];
+  getElementById: (id: string) => HtmlElement | null;
+  querySelector: (selector: string) => HtmlElement | null;
+  querySelectorAll: (selector: string) => HtmlElement[];
+  getScriptData: (scriptId?: string) => any;
+}
 
 // Cloudflare-specific error types
 export class CloudflareError extends Error {
@@ -626,5 +651,165 @@ export class CloudflareScraper {
   restoreSessionCookies(cookies: Record<string, string>, sessionId?: string): void {
     const session = this.getSession(sessionId);
     session.cookies = { ...cookies };
+  }
+
+  /**
+   * Check if response is HTML
+   */
+  isHtmlResponse(response: HttpResponse): boolean {
+    const contentType = response.headers['content-type'] || response.headers['Content-Type'] || '';
+    return contentType.includes('text/html') || 
+           response.body.toLowerCase().includes('<!doctype html') ||
+           response.body.toLowerCase().includes('<html');
+  }
+
+  /**
+   * Parse HTML response and return structured data
+   */
+  parseHtml(response: HttpResponse, options: HtmlParseOptions = {}): HtmlParseResult {
+    if (!this.isHtmlResponse(response)) {
+      throw new Error('Response is not HTML');
+    }
+
+    const html = response.body;
+    const root = parse(html);
+    
+    return {
+      elements: this.convertNodeToElements(root),
+      getElementById: (id: string) => this.getElementById(root, id),
+      querySelector: (selector: string) => this.querySelector(root, selector),
+      querySelectorAll: (selector: string) => this.querySelectorAll(root, selector),
+      getScriptData: (scriptId?: string) => this.getScriptData(root, scriptId)
+    };
+  }
+
+  /**
+   * Convert node-html-parser node to our HtmlElement interface
+   */
+  private convertNodeToElements(node: any): HtmlElement[] {
+    const elements: HtmlElement[] = [];
+    
+    if (node.childNodes) {
+      for (const child of node.childNodes) {
+        if (child.nodeType === 1) { // Element node
+          const element: HtmlElement = {
+            tagName: child.tagName?.toLowerCase() || '',
+            id: child.id,
+            className: child.attributes?.class || child.className,
+            textContent: child.text,
+            innerHTML: child.innerHTML,
+            attributes: child.attributes || {},
+            children: this.convertNodeToElements(child)
+          };
+          elements.push(element);
+        }
+      }
+    }
+    
+    return elements;
+  }
+
+  /**
+   * Get element by ID using node-html-parser
+   */
+  private getElementById(root: any, id: string): HtmlElement | null {
+    const element = root.getElementById(id);
+    if (!element) return null;
+    
+    return {
+      tagName: element.tagName?.toLowerCase() || '',
+      id: element.id,
+      className: element.attributes?.class || element.className,
+      textContent: element.text,
+      innerHTML: element.innerHTML,
+      attributes: element.attributes || {},
+      children: this.convertNodeToElements(element)
+    };
+  }
+
+  /**
+   * Query selector using node-html-parser
+   */
+  private querySelector(root: any, selector: string): HtmlElement | null {
+    const element = root.querySelector(selector);
+    if (!element) return null;
+    
+    return {
+      tagName: element.tagName?.toLowerCase() || '',
+      id: element.id,
+      className: element.attributes?.class || element.className,
+      textContent: element.text,
+      innerHTML: element.innerHTML,
+      attributes: element.attributes || {},
+      children: this.convertNodeToElements(element)
+    };
+  }
+
+  /**
+   * Query selector all using node-html-parser
+   */
+  private querySelectorAll(root: any, selector: string): HtmlElement[] {
+    const elements = root.querySelectorAll(selector);
+    return elements.map((element: any) => ({
+      tagName: element.tagName?.toLowerCase() || '',
+      id: element.id,
+      className: element.attributes?.class || element.className,
+      textContent: element.text,
+      innerHTML: element.innerHTML,
+      attributes: element.attributes || {},
+      children: this.convertNodeToElements(element)
+    }));
+  }
+
+  /**
+   * Get script data from specific script tag
+   */
+  private getScriptData(root: any, scriptId?: string): any {
+    const targetId = scriptId || '__NEXT_DATA__';
+    const scriptElement = root.getElementById(targetId);
+    
+    if (!scriptElement || scriptElement.tagName?.toLowerCase() !== 'script') {
+      return null;
+    }
+
+    try {
+      // Extract JSON content from script tag
+      const content = scriptElement.text || scriptElement.innerHTML;
+      return JSON.parse(content);
+    } catch (error) {
+      debugLogger.logCurlError(error, `Failed to parse script data from ${targetId}`);
+      return null;
+    }
+  }
+
+  /**
+   * Make request and parse HTML response
+   */
+  async requestHtml(
+    url: string,
+    options: RequestOptions = {},
+    sessionId?: string
+  ): Promise<{ response: HttpResponse; html: HtmlParseResult }> {
+    const response = await this.request(url, options, sessionId);
+    
+    if (!this.isHtmlResponse(response)) {
+      throw new Error('Response is not HTML');
+    }
+
+    const html = this.parseHtml(response);
+    return { response, html };
+  }
+
+  /**
+   * Make request and extract data from specific script tag
+   */
+  async requestScriptData(
+    url: string,
+    scriptId: string = '__NEXT_DATA__',
+    options: RequestOptions = {},
+    sessionId?: string
+  ): Promise<any> {
+    const { html } = await this.requestHtml(url, options, sessionId);
+    return html.getScriptData(scriptId);
   }
 } 
