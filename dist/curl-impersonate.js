@@ -342,18 +342,22 @@ class CurlImpersonate {
         if (options.method && options.method !== 'GET') {
             args.push('-X', options.method);
         }
-        // User agent
-        args.push('-H', `User-Agent: ${fingerprint.userAgent}`);
-        // OS-specific headers
-        if (fingerprint.secChUaPlatform) {
-            args.push('-H', `sec-ch-ua-platform: ${fingerprint.secChUaPlatform}`);
+        // Note: curl-impersonate binary automatically adds browser headers
+        // We only add User-Agent if explicitly requested or for custom fingerprints
+        if (options.headers?.['User-Agent']) {
+            args.push('-H', `User-Agent: ${options.headers['User-Agent']}`);
         }
-        if (fingerprint.acceptLanguage) {
-            args.push('-H', `Accept-Language: ${fingerprint.acceptLanguage}`);
+        else if (fingerprint.userAgent && !fingerprint.binaryName?.startsWith('curl_')) {
+            // Only add User-Agent for custom fingerprints, not for curl-impersonate binaries
+            args.push('-H', `User-Agent: ${fingerprint.userAgent}`);
         }
-        if (fingerprint.acceptEncoding) {
-            args.push('-H', `Accept-Encoding: ${fingerprint.acceptEncoding}`);
+        else if (fingerprint.userAgent && fingerprint.binaryName?.startsWith('curl_')) {
+            // For curl-impersonate binaries, only add User-Agent if it's different from the binary's default
+            // This allows custom fingerprints to override the binary's default User-Agent
+            args.push('-H', `User-Agent: ${fingerprint.userAgent}`);
         }
+        // Don't add OS-specific headers as curl-impersonate binary handles them automatically
+        // Only add custom headers that aren't browser-specific
         // Custom headers
         if (options.headers) {
             for (const [key, value] of Object.entries(options.headers)) {

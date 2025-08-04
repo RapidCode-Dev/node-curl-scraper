@@ -4,11 +4,22 @@
   "description": "Advanced web scraping tool using curl-impersonate with Cloudflare bypass, proxy management, and multi-threading support",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist/**/*"
+  ],
   "scripts": {
     "build": "tsc",
     "dev": "ts-node src/index.ts",
     "test": "jest",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "prepare": "npm run build"
   },
   "keywords": ["scraping", "curl-impersonate", "cloudflare", "bypass", "proxy", "multi-threading", "anti-bot", "web-scraping"],
   "author": "C0RE1337",

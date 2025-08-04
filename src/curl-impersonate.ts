@@ -12,7 +12,8 @@ import {
   BrowserVersion,
   CurlImpersonateConfig,
   OSPlatform,
-  VersionGenerator
+  VersionGenerator,
+  CURL_ERROR_CODES
 } from './types';
 
 export class CurlImpersonate {
@@ -394,19 +395,21 @@ export class CurlImpersonate {
       args.push('-X', options.method);
     }
 
-    // User agent
-    args.push('-H', `User-Agent: ${fingerprint.userAgent}`);
+    // Note: curl-impersonate binary automatically adds browser headers
+    // We only add User-Agent if explicitly requested or for custom fingerprints
+    if (options.headers?.['User-Agent']) {
+      args.push('-H', `User-Agent: ${options.headers['User-Agent']}`);
+    } else if (fingerprint.userAgent && !fingerprint.binaryName?.startsWith('curl_')) {
+      // Only add User-Agent for custom fingerprints, not for curl-impersonate binaries
+      args.push('-H', `User-Agent: ${fingerprint.userAgent}`);
+    } else if (fingerprint.userAgent && fingerprint.binaryName?.startsWith('curl_')) {
+      // For curl-impersonate binaries, only add User-Agent if it's different from the binary's default
+      // This allows custom fingerprints to override the binary's default User-Agent
+      args.push('-H', `User-Agent: ${fingerprint.userAgent}`);
+    }
 
-    // OS-specific headers
-    if (fingerprint.secChUaPlatform) {
-      args.push('-H', `sec-ch-ua-platform: ${fingerprint.secChUaPlatform}`);
-    }
-    if (fingerprint.acceptLanguage) {
-      args.push('-H', `Accept-Language: ${fingerprint.acceptLanguage}`);
-    }
-    if (fingerprint.acceptEncoding) {
-      args.push('-H', `Accept-Encoding: ${fingerprint.acceptEncoding}`);
-    }
+    // Don't add OS-specific headers as curl-impersonate binary handles them automatically
+    // Only add custom headers that aren't browser-specific
 
     // Custom headers
     if (options.headers) {
@@ -500,7 +503,21 @@ export class CurlImpersonate {
         } else {
           // Debug logging with file saving
           debugLogger.logRawCurlWithFile(args, stdout, stderr, 'curl-error', url);
-          reject(new Error(`Curl failed with code ${code}: ${stderr}`));
+          
+          // Create detailed error message with CURL error code information
+          const errorInfo = code !== null && code in CURL_ERROR_CODES ? CURL_ERROR_CODES[code] : null;
+          const errorMessage = errorInfo 
+            ? `Curl failed with code ${code} (${errorInfo.name}): ${errorInfo.description}. Stderr: ${stderr}`
+            : `Curl failed with code ${code}: ${stderr}`;
+          
+          const error = new Error(errorMessage);
+          // Add CURL error code as a property for easier access
+          (error as any).curlCode = code;
+          (error as any).curlCodeName = errorInfo?.name;
+          (error as any).stderr = stderr;
+          (error as any).stdout = stdout;
+          
+          reject(error);
         }
       });
 
@@ -643,13 +660,99 @@ export class CurlImpersonate {
   }
 
   /**
-   * Parse curl error
+   * Parse curl error with comprehensive CURL error code handling
    */
   private parseError(error: Error): CurlError {
+    // Try to extract CURL error code from the error message
+    const curlCode = this.extractCurlErrorCode(error.message);
+    const errorInfo = curlCode !== null ? CURL_ERROR_CODES[curlCode] : null;
+    
+    // Determine if this is a proxy-related error
+    const isProxyError = this.isProxyRelatedError(error.message, curlCode);
+    
+    // Determine if this is a retryable error
+    const isRetryable = errorInfo ? errorInfo.retryable : this.isRetryableError(error.message);
+    
     return {
-      code: 'CURL_ERROR',
-      message: error.message,
-      details: error.stack
+      code: errorInfo ? errorInfo.name : 'CURL_ERROR',
+      message: errorInfo ? errorInfo.description : error.message,
+      details: error.stack,
+      curlCode: curlCode ?? undefined,
+      curlCodeName: errorInfo ? errorInfo.name : undefined,
+      proxyFailed: isProxyError,
+      retryable: isRetryable
     };
+  }
+
+  /**
+   * Extract CURL error code from error message
+   */
+  private extractCurlErrorCode(message: string): number | null {
+    // Common patterns for CURL error codes in error messages
+    const patterns = [
+      /curl: \(([0-9]+)\)/i,           // curl: (5) Couldn't resolve proxy
+      /error code: ([0-9]+)/i,         // error code: 5
+      /curl error: ([0-9]+)/i,         // curl error: 5
+      /failed with code ([0-9]+)/i,    // failed with code 5
+      /exit code: ([0-9]+)/i,          // exit code: 5
+      /returned ([0-9]+)/i             // returned 5
+    ];
+    
+    for (const pattern of patterns) {
+      const match = message.match(pattern);
+      if (match) {
+        const code = parseInt(match[1], 10);
+        if (code in CURL_ERROR_CODES) {
+          return code;
+        }
+      }
+    }
+    
+    return null;
+  }
+
+  /**
+   * Check if error is proxy-related
+   */
+  private isProxyRelatedError(message: string, curlCode: number | null): boolean {
+    // Check by CURL error code
+    if (curlCode !== null) {
+      const proxyErrorCodes = [5, 7, 28, 97]; // CURLE_COULDNT_RESOLVE_PROXY, CURLE_COULDNT_CONNECT, CURLE_OPERATION_TIMEDOUT, CURLE_PROXY
+      if (proxyErrorCodes.includes(curlCode)) {
+        return true;
+      }
+    }
+    
+    // Check by error message keywords
+    const proxyKeywords = [
+      'proxy', 'PROXY', 'Proxy',
+      'couldn\'t resolve proxy',
+      'failed to connect',
+      'connection refused',
+      'timeout',
+      'proxy handshake',
+      'proxy authentication'
+    ];
+    
+    return proxyKeywords.some(keyword => message.toLowerCase().includes(keyword.toLowerCase()));
+  }
+
+  /**
+   * Check if error is retryable based on message content
+   */
+  private isRetryableError(message: string): boolean {
+    const retryableKeywords = [
+      'timeout', 'timed out',
+      'connection refused',
+      'couldn\'t connect',
+      'couldn\'t resolve',
+      'network is unreachable',
+      'no route to host',
+      'temporary failure',
+      'try again',
+      'temporary error'
+    ];
+    
+    return retryableKeywords.some(keyword => message.toLowerCase().includes(keyword.toLowerCase()));
   }
 } 
