@@ -348,6 +348,11 @@ export class CloudflareScraper {
   private isCloudflareChallenge(response: HttpResponse): boolean {
     // DISABLED: We don't know exactly what Cloudflare challenges look like yet
     // Only implement when we have definitive examples
+    // x-cache: Error from cloudfront
+    if (response.statusCode === 403 ) {
+      return true;
+    }
+
     return false;
   }
 

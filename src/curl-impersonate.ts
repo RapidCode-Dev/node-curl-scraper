@@ -327,7 +327,7 @@ export class CurlImpersonate {
       const result = await this.executeCurl(curlArgs, url);
       const endTime = Date.now();
       
-      const response = this.parseResponse(result, url, endTime - startTime);
+      const response = this.parseResponse(result, url, endTime - startTime, options);
       
       // Debug logging with file saving (only if not called from CloudflareScraper)
       debugLogger.logResponseWithFile(response, endTime - startTime, 'curl-response', false);
@@ -388,7 +388,7 @@ export class CurlImpersonate {
     const args: string[] = [];
 
     // Basic options - include headers in output
-    args.push('-s', '-i', '-w', '%{http_code}|%{http_version}|%{size_download}|%{time_total}|%{url_effective}');
+    args.push('-s', '-i', '-w', '\\n%{http_code}|%{http_version}|%{size_download}|%{time_total}|%{url_effective}');
     
     // Method
     if (options.method && options.method !== 'GET') {
@@ -532,122 +532,80 @@ export class CurlImpersonate {
   /**
    * Parse curl response with headers
    */
-  private parseResponse(output: string, originalUrl: string, responseTime: number): HttpResponse {
-    const lines = output.trim().split('\n');
+  private parseResponse(output: string, originalUrl: string, responseTime: number, options: RequestOptions = {}): HttpResponse {
+    const lines = output.split('\n');
     
-    // Parse HTTP headers and body
-    const headers: Record<string, string> = {};
-    let bodyLines: string[] = [];
-    let inHeaders = true;
+    // Step 1: Find and remove the curl status line (last line with format: 200|2|3761|8.499299|https://www.autotrader.com/)
     let statusLine = '';
-    let foundHttpStatus = false;
+    let responseLines: string[] = [];
     
-    // First pass: find the status line and parse headers
-    for (let i = 0; i < lines.length; i++) {
+    for (let i = lines.length - 1; i >= 0; i--) {
       const line = lines[i];
-      
-      // Check if this is the curl status line (starts with 3 digits followed by |)
-      if (line.match(/^[0-9]{3}\|[0-9]+\|[0-9]+\|[0-9.]+\|/)) {
+      if (line.match(/^[0-9]{3}\|[0-9]+\|[0-9]+\|[0-9.]+\|.+$/)) {
         statusLine = line;
+        responseLines = lines.slice(0, i);
         break;
-      }
-      
-      // Check if this is the HTTP status line (starts with HTTP/)
-      if (line.startsWith('HTTP/')) {
-        foundHttpStatus = true;
-        // This is the HTTP status line, next lines are headers
-        continue;
-      }
-      
-      // Check if this is a header line (contains ':')
-      if (inHeaders && line.includes(':')) {
-        const colonIndex = line.indexOf(':');
-        const key = line.substring(0, colonIndex).trim().toLowerCase();
-        const value = line.substring(colonIndex + 1).trim();
-        
-        // Handle multi-line headers
-        if (headers[key]) {
-          headers[key] += ', ' + value;
-        } else {
-          headers[key] = value;
-        }
-      } else if (line.trim() === '') {
-        // Empty line marks end of headers, start of body
-        inHeaders = false;
-      } else if (!inHeaders) {
-        // This is part of the body
-        bodyLines.push(line);
-      }
-    }
-    
-    // If no status line found in headers, look for it from the end of the response
-    if (!statusLine && lines.length > 0) {
-      // Search from the end of the response for the status line pattern
-      for (let i = lines.length - 1; i >= 0; i--) {
-        const line = lines[i];
-        
-        // Look for the status line pattern: 3 digits|1-2 digits|digits|decimal|URL
-        const match = line.match(/([0-9]{3})\|([0-9]+)\|([0-9]+)\|([0-9.]+)\|(.+)$/);
-        
-        if (match) {
-          const [, statusCode, httpVersion, size, timeTotal, effectiveUrl] = match;
-          statusLine = `${statusCode}|${httpVersion}|${size}|${timeTotal}|${effectiveUrl}`;
-          
-          // Extract the body (everything except the status line)
-          const statusStart = line.lastIndexOf(statusCode);
-          const bodyPart = line.substring(0, statusStart);
-          
-          // Reconstruct the body: all lines except the one containing the status line
-          bodyLines = [];
-          for (let j = 0; j < lines.length; j++) {
-            if (j !== i) {
-              bodyLines.push(lines[j]);
-            } else if (bodyPart) {
-              // Add the part before the status line
-              bodyLines.push(bodyPart);
-            }
-          }
-          break;
-        }
       }
     }
     
     if (!statusLine) {
-      throw new Error('Could not parse curl response - no status line found');
+      throw new Error('Could not find curl status line in response');
     }
     
-    // Parse curl write format: http_code|http_version|size_download|time_total|url_effective
     const [statusCode, httpVersion, size, timeTotal, effectiveUrl] = statusLine.split('|');
     
-    // If we found HTTP status line, we need to clean up the body
-    if (foundHttpStatus) {
-      // Find the first empty line after HTTP headers and extract only the content after it
-      let bodyStartIndex = -1;
-      for (let i = 0; i < lines.length; i++) {
-        if (lines[i].trim() === '') {
-          bodyStartIndex = i + 1;
-          break;
+    // Step 2: Parse header sections and find body
+    const headers: Record<string, string> = {};
+    let bodyLines: string[] = [];
+    let headerSectionCount = 0;
+    let inHeaders = false;
+    let emptyLineCount = 0;
+    let isSecondHeaderSection = false;
+    
+    for (let i = 0; i < responseLines.length; i++) {
+      const line = responseLines[i];
+      
+      // Check if this line starts a new HTTP section
+      if (line.startsWith('HTTP/')) {
+        headerSectionCount++;
+        inHeaders = true;
+        
+        // If this is the second HTTP section, mark it as the one we want to parse
+        if (headerSectionCount === 2) {
+          isSecondHeaderSection = true;
         }
+        continue;
       }
       
-      if (bodyStartIndex !== -1) {
-        // Extract only the content after the empty line (which separates headers from body)
-        bodyLines = lines.slice(bodyStartIndex);
-        
-        // Remove the curl status line from the end if it exists
-        if (bodyLines.length > 0) {
-          const lastLine = bodyLines[bodyLines.length - 1];
-          if (lastLine.match(/^[0-9]{3}\|[0-9]+\|[0-9]+\|[0-9.]+\|/)) {
-            bodyLines = bodyLines.slice(0, -1);
-          } else {
-            // Check if the curl status line is appended to the last line
-            const match = lastLine.match(/(.*?)([0-9]{3}\|[0-9]+\|[0-9]+\|[0-9.]+\|.+)$/);
-            if (match) {
-              const [, bodyContent, statusLine] = match;
-              bodyLines[bodyLines.length - 1] = bodyContent;
-            }
-          }
+      // If we're in headers and find an empty line, count it
+      if (inHeaders && line.trim() === '') {
+        emptyLineCount++;
+        inHeaders = false;
+        continue;
+      }
+      
+      // If we're in headers, parse key:value format
+      if (inHeaders && line.includes(':')) {
+        // Only save headers from the second section (if there are 2 sections)
+        if (headerSectionCount === 1 || isSecondHeaderSection) {
+          const colonIndex = line.indexOf(':');
+          const key = line.substring(0, colonIndex).toLowerCase();
+          const value = line.substring(colonIndex + 1).trim();
+          headers[key] = value;
         }
+        continue;
+      }
+      
+      // If we've found 2 empty lines (proxy headers + HTTP headers), this is the body
+      if (emptyLineCount >= 2 && line.trim() !== '') {
+        bodyLines = responseLines.slice(i);
+        break;
+      }
+      
+      // If we've found 1 empty line and this is not an empty line, this is the body (no proxy)
+      if (emptyLineCount === 1 && line.trim() !== '' && !line.startsWith('HTTP/')) {
+        bodyLines = responseLines.slice(i);
+        break;
       }
     }
     
