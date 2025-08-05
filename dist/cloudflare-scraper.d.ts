@@ -20,10 +20,10 @@ export interface HtmlParseResult {
     getScriptData: (scriptId?: string) => any;
 }
 export declare class CloudflareError extends Error {
-    code: 'CF_CHALLENGE' | 'CF_BANNED' | 'CF_TIMEOUT' | 'CF_JS_CHALLENGE' | 'CF_CAPTCHA';
+    code: 'CF_CHALLENGE' | 'CF_BANNED' | 'CF_BLOCKED' | 'CF_TIMEOUT' | 'CF_JS_CHALLENGE' | 'CF_CAPTCHA';
     response?: HttpResponse | undefined;
     retryable: boolean;
-    constructor(message: string, code: 'CF_CHALLENGE' | 'CF_BANNED' | 'CF_TIMEOUT' | 'CF_JS_CHALLENGE' | 'CF_CAPTCHA', response?: HttpResponse | undefined, retryable?: boolean);
+    constructor(message: string, code: 'CF_CHALLENGE' | 'CF_BANNED' | 'CF_BLOCKED' | 'CF_TIMEOUT' | 'CF_JS_CHALLENGE' | 'CF_CAPTCHA', response?: HttpResponse | undefined, retryable?: boolean);
 }
 export declare class ProxyError extends Error {
     code: 'PROXY_REFUSED' | 'PROXY_TIMEOUT' | 'PROXY_AUTH_FAILED' | 'PROXY_DNS_ERROR' | 'PROXY_CONNECTION_ERROR';
@@ -75,17 +75,18 @@ export interface ScrapingSession {
     requestCount: number;
     errorCount: number;
 }
+export interface CloudflareScraperConfig {
+    session?: Partial<SessionConfig>;
+    cloudflare?: Partial<CloudflareConfig>;
+    proxyRotation?: Partial<ProxyRotationConfig>;
+    binariesPath?: string;
+}
 export declare class CloudflareScraper {
     private curlImpersonate;
     private sessions;
     private proxyIndex;
     private config;
-    constructor(config?: {
-        session?: Partial<SessionConfig>;
-        cloudflare?: Partial<CloudflareConfig>;
-        proxyRotation?: Partial<ProxyRotationConfig>;
-        binariesPath?: string;
-    });
+    constructor(config?: CloudflareScraperConfig);
     /**
      * Create a new session
      */
@@ -98,6 +99,7 @@ export declare class CloudflareScraper {
      * Make request with Cloudflare and proxy error handling
      */
     request(url: string, options?: RequestOptions, sessionId?: string): Promise<HttpResponse>;
+    private isCloudflareBlocked;
     /**
      * Check if response is a Cloudflare challenge
      */

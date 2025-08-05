@@ -151,6 +151,14 @@ class CloudflareScraper {
                     }
                     throw cfError;
                 }
+                if (this.isCloudflareBlocked(response)) {
+                    debug_1.debugLogger.logCloudflareError(response, session.id);
+                    if (this.config.cloudflare.autoRetry && this.config.session.rotateOnError) {
+                        session = this.rotateSession(session);
+                        continue;
+                    }
+                    throw new CloudflareError('Cloudflare blocked', 'CF_BLOCKED', response, false);
+                }
                 // Update session cookies
                 this.updateSessionCookies(session, response);
                 return response;
@@ -205,12 +213,16 @@ class CloudflareScraper {
         maxRetriesError.lastError = lastError;
         throw maxRetriesError;
     }
+    isCloudflareBlocked(response) {
+        return response.statusCode === 403;
+    }
     /**
      * Check if response is a Cloudflare challenge
      */
     isCloudflareChallenge(response) {
         // DISABLED: We don't know exactly what Cloudflare challenges look like yet
         // Only implement when we have definitive examples
+        // x-cache: Error from cloudfront
         return false;
     }
     /**
