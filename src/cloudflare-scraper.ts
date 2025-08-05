@@ -1,3 +1,4 @@
+import { debug } from 'console';
 import { CurlImpersonate } from './curl-impersonate';
 import { debugLogger } from './debug';
 import { 
@@ -37,7 +38,7 @@ export interface HtmlParseResult {
 export class CloudflareError extends Error {
   constructor(
     message: string,
-    public code: 'CF_CHALLENGE' | 'CF_BANNED' | 'CF_TIMEOUT' | 'CF_JS_CHALLENGE' | 'CF_CAPTCHA',
+    public code: 'CF_CHALLENGE' | 'CF_BANNED' | 'CF_BLOCKED' | 'CF_TIMEOUT' | 'CF_JS_CHALLENGE' | 'CF_CAPTCHA',
     public response?: HttpResponse,
     public retryable: boolean = true
   ) {
@@ -274,6 +275,17 @@ export class CloudflareScraper {
           throw cfError;
         }
 
+        if (this.isCloudflareBlocked(response)) {
+            debugLogger.logCloudflareError(response, session.id);
+
+            if(this.config.cloudflare.autoRetry && this.config.session.rotateOnError) {
+                session = this.rotateSession(session);
+                continue;
+            }
+            
+            throw new CloudflareError('Cloudflare blocked', 'CF_BLOCKED', response, false);
+        }
+
         // Update session cookies
         this.updateSessionCookies(session, response);
         
@@ -342,6 +354,10 @@ export class CloudflareScraper {
     throw maxRetriesError;
   }
 
+  private isCloudflareBlocked(response: HttpResponse): boolean {
+    return response.statusCode === 403;
+  }
+
   /**
    * Check if response is a Cloudflare challenge
    */
@@ -349,10 +365,6 @@ export class CloudflareScraper {
     // DISABLED: We don't know exactly what Cloudflare challenges look like yet
     // Only implement when we have definitive examples
     // x-cache: Error from cloudfront
-    if (response.statusCode === 403 ) {
-      return true;
-    }
-
     return false;
   }
 
