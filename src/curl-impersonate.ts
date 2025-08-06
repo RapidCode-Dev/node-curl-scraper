@@ -396,24 +396,33 @@ export class CurlImpersonate {
     }
 
     // Note: curl-impersonate binary automatically adds browser headers
-    // We only add User-Agent if explicitly requested or for custom fingerprints
-    if (options.headers?.['User-Agent']) {
+    // We should not add any browser-specific headers for curl-impersonate binaries
+    let browserHeadersAdded = false;
+    
+    // For curl-impersonate binaries, NEVER add browser-specific headers as they handle them automatically
+    if (fingerprint.binaryName?.startsWith('curl_')) {
+      // Skip all browser-specific headers for curl-impersonate binaries
+      browserHeadersAdded = true; // Mark as added to prevent them from being added in the custom headers loop
+    } else if (options.headers?.['User-Agent']) {
+      // Only add User-Agent for custom fingerprints when explicitly provided
       args.push('-H', `User-Agent: ${options.headers['User-Agent']}`);
-    } else if (fingerprint.userAgent && !fingerprint.binaryName?.startsWith('curl_')) {
-      // Only add User-Agent for custom fingerprints, not for curl-impersonate binaries
+      browserHeadersAdded = true;
+    } else if (fingerprint.userAgent) {
+      // Only add User-Agent for custom fingerprints when not using curl-impersonate binaries
       args.push('-H', `User-Agent: ${fingerprint.userAgent}`);
-    } else if (fingerprint.userAgent && fingerprint.binaryName?.startsWith('curl_')) {
-      // For curl-impersonate binaries, only add User-Agent if it's different from the binary's default
-      // This allows custom fingerprints to override the binary's default User-Agent
-      args.push('-H', `User-Agent: ${fingerprint.userAgent}`);
+      browserHeadersAdded = true;
     }
 
     // Don't add OS-specific headers as curl-impersonate binary handles them automatically
     // Only add custom headers that aren't browser-specific
 
-    // Custom headers
+    // Custom headers (excluding browser-specific headers if already handled)
     if (options.headers) {
       for (const [key, value] of Object.entries(options.headers)) {
+        // Skip browser-specific headers if we're using curl-impersonate binaries
+        if (browserHeadersAdded && this.isBrowserSpecificHeader(key)) {
+          continue;
+        }
         args.push('-H', `${key}: ${value}`);
       }
     }
@@ -726,6 +735,34 @@ export class CurlImpersonate {
     ];
     
     return proxyKeywords.some(keyword => message.toLowerCase().includes(keyword.toLowerCase()));
+  }
+
+  /**
+   * Check if a header is browser-specific and should be handled by curl-impersonate binary
+   */
+  private isBrowserSpecificHeader(headerName: string): boolean {
+    const browserHeaders = [
+      'user-agent',
+      'sec-ch-ua',
+      'sec-ch-ua-mobile',
+      'sec-ch-ua-platform',
+      'sec-ch-ua-platform-version',
+      'sec-ch-ua-model',
+      'sec-ch-ua-arch',
+      'sec-ch-ua-bitness',
+      'sec-ch-ua-full-version',
+      'sec-ch-ua-full-version-list',
+      'accept',
+      'accept-language',
+      'accept-encoding',
+      'upgrade-insecure-requests',
+      'sec-fetch-dest',
+      'sec-fetch-mode',
+      'sec-fetch-site',
+      'sec-fetch-user'
+    ];
+    
+    return browserHeaders.includes(headerName.toLowerCase());
   }
 
   /**
