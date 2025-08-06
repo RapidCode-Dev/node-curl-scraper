@@ -358,6 +358,25 @@ export class DebugLogger {
     }
   }
 
+  logRequestHeadersWithFile(url: string, headers: any, context?: string): void {
+    if (!this.shouldLog('curl')) return;
+    
+    console.log('\n📋 [DEBUG_CURL] REQUEST HEADERS');
+    console.log('🌐 URL:', url);
+    console.log('📋 Headers:', this.formatData(headers, 'headers'));
+    console.log('📋 [DEBUG_CURL] END REQUEST HEADERS\n');
+    
+    if (this.config.saveToFile && headers) {
+      const filename = context ? `${context}_request_headers.json` : 'request_headers.json';
+      const content = JSON.stringify({
+        url,
+        headers,
+        timestamp: new Date().toISOString()
+      }, null, 2);
+      this.saveToFile(filename, content, 'request_headers', url);
+    }
+  }
+
   logRetrySummary(allErrors: Array<{ attempt: number; error: Error; timestamp: number }>, sessionId?: string): void {
     if (!this.shouldLog('cloudflare')) return;
     

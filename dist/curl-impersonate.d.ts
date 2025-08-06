@@ -1,72 +1,31 @@
-import { BrowserFingerprint, RequestOptions, HttpResponse, JsonResponse, BrowserType, BrowserVersion, CurlImpersonateConfig, OSPlatform } from './types';
+import { RequestOptions, HttpResponse, JsonResponse, CurlImpersonateConfig } from './types';
+import { FingerprintConfig } from './fingerprint-config';
 export declare class CurlImpersonate {
-    private binariesPath;
-    private availableBrowsers;
+    private binaryPath;
     private config;
     constructor(config?: CurlImpersonateConfig);
     /**
-     * Discover available curl-impersonate binaries
+     * Get available fingerprint configurations
      */
-    private discoverBinaries;
+    getAvailableFingerprints(): string[];
     /**
-     * Parse binary filename to extract browser fingerprint
+     * Get a specific fingerprint configuration
      */
-    private parseBinaryName;
+    getFingerprintConfig(name: string): FingerprintConfig | null;
     /**
-     * Detect platform from version string
+     * Find fingerprint by browser, version, and OS
      */
-    private detectPlatform;
+    findFingerprintByBrowser(browser: string, version?: string, os?: string): FingerprintConfig | null;
     /**
-     * Detect OS from version string
+     * Make HTTP request with fingerprint configuration
      */
-    private detectOS;
-    /**
-     * Generate User-Agent string with OS-specific details
-     */
-    private generateUserAgent;
-    /**
-     * Get sec-ch-ua-platform header value
-     */
-    private getSecChUaPlatform;
-    /**
-     * Get Accept-Language header value
-     */
-    private getAcceptLanguage;
-    /**
-     * Get Accept-Encoding header value
-     */
-    private getAcceptEncoding;
-    /**
-     * Get available browsers
-     */
-    getAvailableBrowsers(): BrowserFingerprint[];
-    /**
-     * Find specific browser by type, version, and platform
-     */
-    findBrowser(type: BrowserType, version: string, platform?: string, os?: OSPlatform): BrowserFingerprint | null;
-    /**
-     * Generate a custom browser fingerprint for any Chrome version
-     * This allows using any Chrome version even if the binary doesn't exist
-     */
-    generateChromeFingerprint(version: string, os?: OSPlatform): BrowserFingerprint;
-    /**
-     * Get a random Chrome version between min and max
-     */
-    getRandomChromeVersion(minVersion?: number, maxVersion?: number): string;
-    /**
-     * Make HTTP request
-     */
-    request(url: string, options?: RequestOptions, browser?: BrowserFingerprint | BrowserVersion): Promise<HttpResponse>;
+    request(url: string, options?: RequestOptions, fingerprintName?: string): Promise<HttpResponse>;
     /**
      * Make JSON request and parse response
      */
-    requestJson<T = any>(url: string, options?: RequestOptions, browser?: BrowserFingerprint | BrowserVersion): Promise<JsonResponse<T>>;
+    requestJson<T = any>(url: string, options?: RequestOptions, fingerprintName?: string): Promise<JsonResponse<T>>;
     /**
-     * Resolve browser fingerprint from various input types
-     */
-    private resolveBrowser;
-    /**
-     * Build curl command arguments with OS-specific headers
+     * Build curl command arguments with fingerprint configuration
      */
     private buildCurlArgs;
     /**
@@ -93,6 +52,10 @@ export declare class CurlImpersonate {
      * Check if error is proxy-related
      */
     private isProxyRelatedError;
+    /**
+     * Extract request headers from stderr (verbose curl output)
+     */
+    private extractRequestHeadersFromStderr;
     /**
      * Check if error is retryable based on message content
      */

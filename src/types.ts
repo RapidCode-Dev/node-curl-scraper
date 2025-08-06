@@ -3,7 +3,7 @@ export interface ScrapingSession {
   id: string;
   cookies: Record<string, string>;
   userAgent: string;
-  fingerprint: BrowserFingerprint;
+  fingerprint: any; // Updated to use FingerprintConfig from fingerprint-config.ts
   proxy?: ProxyConfig;
   retryCount: number;
   lastRequestTime: number;
@@ -17,7 +17,7 @@ export interface ScrapingConfig {
   maxRedirects?: number;
   verifySSL?: boolean;
   userAgents?: string[];
-  fingerprints?: BrowserFingerprint[];
+  fingerprints?: string[]; // Updated to use fingerprint names
   proxyRotation?: ProxyRotationConfig;
   cloudflareBypass?: CloudflareBypassConfig;
   rateLimiting?: RateLimitingConfig;
@@ -81,20 +81,6 @@ export interface MultiThreadingConfig {
   workerTimeout?: number;
   queueSize?: number;
   loadBalancing?: 'round-robin' | 'least-busy' | 'random';
-}
-
-// Browser fingerprint types (existing)
-export interface BrowserFingerprint {
-  name: string;
-  version: string;
-  platform?: 'desktop' | 'mobile' | 'ios' | 'android';
-  os?: 'windows' | 'macos' | 'ios' | 'android' | 'linux';
-  userAgent: string;
-  binaryName: string;
-  // Additional OS-specific headers
-  secChUaPlatform?: string;
-  acceptLanguage?: string;
-  acceptEncoding?: string;
 }
 
 export interface RequestOptions {
@@ -236,36 +222,11 @@ export const CURL_ERROR_CODES: Record<number, { name: string; description: strin
   101: { name: 'CURLE_ECH_REQUIRED', description: 'ECH was attempted but failed.', retryable: true }
 };
 
-export type BrowserType = 
-  | 'chrome' 
-  | 'firefox' 
-  | 'safari' 
-  | 'edge' 
-  | 'tor';
-
-export type OSPlatform = 'windows' | 'macos' | 'ios' | 'android' | 'linux';
-
-export interface BrowserVersion {
-  type: BrowserType;
-  version: string;
-  platform?: 'desktop' | 'mobile' | 'ios' | 'android';
-  os?: OSPlatform;
-}
-
 export interface CurlImpersonateConfig {
   binariesPath?: string;
   defaultTimeout?: number;
   defaultMaxRedirects?: number;
   defaultVerifySSL?: boolean;
-}
-
-// Enhanced version generation
-export interface VersionGenerator {
-  browser: BrowserType;
-  minVersion: number;
-  maxVersion: number;
-  os: OSPlatform;
-  platform?: 'desktop' | 'mobile' | 'ios' | 'android';
 }
 
 // Scraping result types

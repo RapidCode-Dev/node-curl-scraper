@@ -36,6 +36,7 @@ export declare class DebugLogger {
     logResponseWithFile(response: any, responseTime: number, context?: string, saveToFile?: boolean): void;
     private shouldSaveResponse;
     logRequestWithFile(url: string, options: any, fingerprint: any, context?: string): void;
+    logRequestHeadersWithFile(url: string, headers: any, context?: string): void;
     logRetrySummary(allErrors: Array<{
         attempt: number;
         error: Error;

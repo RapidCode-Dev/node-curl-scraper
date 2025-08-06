@@ -10,16 +10,41 @@ describe('CurlImpersonate', () => {
     });
   });
 
+  describe('Fingerprint Configuration Tests', () => {
+    it('should get available fingerprint configurations', () => {
+      const fingerprints = curl.getAvailableFingerprints();
+      expect(Array.isArray(fingerprints)).toBe(true);
+      expect(fingerprints.length).toBeGreaterThan(0);
+      expect(fingerprints).toContain('chrome136-macos');
+      expect(fingerprints).toContain('chrome136-windows');
+      expect(fingerprints).toContain('firefox133-macos');
+    });
+
+    it('should get specific fingerprint configuration', () => {
+      const fingerprint = curl.getFingerprintConfig('chrome136-macos');
+      expect(fingerprint).toBeDefined();
+      expect(fingerprint?.name).toBe('Chrome 136 macOS');
+      expect(fingerprint?.browser).toBe('chrome');
+      expect(fingerprint?.version).toBe('136');
+      expect(fingerprint?.os).toBe('macos');
+      expect(fingerprint?.headers['User-Agent']).toContain('Chrome/136');
+    });
+
+    it('should find fingerprint by browser, version, and OS', () => {
+      const fingerprint = curl.findFingerprintByBrowser('chrome', '136', 'macos');
+      expect(fingerprint).toBeDefined();
+      expect(fingerprint?.name).toBe('Chrome 136 macOS');
+    });
+
+    it('should return null for non-existent fingerprint', () => {
+      const fingerprint = curl.getFingerprintConfig('non-existent');
+      expect(fingerprint).toBeNull();
+    });
+  });
+
   describe('Real Binary Execution Tests', () => {
     it('should execute curl binary with correct arguments', async () => {
-      // Find a real browser
-      const browsers = curl.getAvailableBrowsers();
-      expect(browsers.length).toBeGreaterThan(0);
-      
-      const browser = browsers.find(b => b.name === 'chrome99');
-      expect(browser).toBeDefined();
-
-      const response = await curl.request('https://httpbin.org/get', {}, browser);
+      const response = await curl.request('https://httpbin.org/get', {}, 'chrome136-macos');
 
       // Verify response
       expect(response.statusCode).toBe(200);
@@ -28,13 +53,10 @@ describe('CurlImpersonate', () => {
     });
 
     it('should execute POST request with JSON body', async () => {
-      const browsers = curl.getAvailableBrowsers();
-      const browser = browsers.find(b => b.name === 'chrome99');
-      
       const response = await curl.request('https://httpbin.org/post', {
         method: 'POST',
         json: { message: 'test' }
-      }, browser);
+      }, 'chrome136-macos');
 
       // Handle potential 502 errors from httpbin.org
       expect([200, 502]).toContain(response.statusCode);
@@ -45,52 +67,40 @@ describe('CurlImpersonate', () => {
     });
 
     it('should execute request with cookies', async () => {
-      const browsers = curl.getAvailableBrowsers();
-      const browser = browsers.find(b => b.name === 'chrome99');
-      
       const response = await curl.request('https://httpbin.org/cookies', {
         cookies: {
           session: 'abc123',
           user: 'john'
         }
-      }, browser);
+      }, 'chrome136-macos');
 
       expect(response.statusCode).toBe(200);
       expect(response.body).toContain('"cookies"');
     });
 
     it('should execute request with custom headers', async () => {
-      const browsers = curl.getAvailableBrowsers();
-      const browser = browsers.find(b => b.name === 'chrome99');
-      
       const response = await curl.request('https://httpbin.org/headers', {
         headers: {
           'X-Custom': 'value',
           'Accept': 'application/json'
         }
-      }, browser);
+      }, 'chrome136-macos');
 
       expect(response.statusCode).toBe(200);
       expect(response.body).toContain('"headers"');
     });
 
     it('should execute request with timeout', async () => {
-      const browsers = curl.getAvailableBrowsers();
-      const browser = browsers.find(b => b.name === 'chrome99');
-      
       const response = await curl.request('https://httpbin.org/delay/1', {
         timeout: 5000
-      }, browser);
+      }, 'chrome136-macos');
 
       expect(response.statusCode).toBe(200);
     }, 10000); // 10 second timeout
 
     it('should handle curl execution errors', async () => {
-      const browsers = curl.getAvailableBrowsers();
-      const browser = browsers.find(b => b.name === 'chrome99');
-      
       // Test with a URL that should actually fail (non-existent domain)
-      await expect(curl.request('https://this-domain-definitely-does-not-exist-12345-xyz.com', {}, browser))
+      await expect(curl.request('https://this-domain-definitely-does-not-exist-12345-xyz.com', {}, 'chrome136-macos'))
         .rejects.toMatchObject({
           code: 'CURLE_COULDNT_RESOLVE_HOST',
           curlCode: 6
@@ -98,10 +108,7 @@ describe('CurlImpersonate', () => {
     });
 
     it('should parse JSON responses correctly', async () => {
-      const browsers = curl.getAvailableBrowsers();
-      const browser = browsers.find(b => b.name === 'chrome99');
-      
-      const response = await curl.requestJson('https://httpbin.org/json', {}, browser);
+      const response = await curl.requestJson('https://httpbin.org/json', {}, 'chrome136-macos');
 
       expect(response.statusCode).toBe(200);
       expect(response.data).toBeDefined();
@@ -109,116 +116,58 @@ describe('CurlImpersonate', () => {
     });
 
     it('should handle different browser fingerprints', async () => {
-      const browsers = curl.getAvailableBrowsers();
-      
       // Test Chrome
-      const chrome = browsers.find(b => b.name === 'chrome99');
-      if (chrome) {
-        const response = await curl.request('https://httpbin.org/user-agent', {}, chrome);
-        expect(response.statusCode).toBe(200);
-        expect(response.body).toContain('Chrome'); // Look for Chrome in user-agent
-      }
+      const chromeResponse = await curl.request('https://httpbin.org/user-agent', {}, 'chrome136-macos');
+      expect(chromeResponse.statusCode).toBe(200);
+      expect(chromeResponse.body).toContain('Chrome'); // Look for Chrome in user-agent
 
       // Test Firefox
-      const firefox = browsers.find(b => b.name.includes('firefox'));
-      if (firefox) {
-        const response = await curl.request('https://httpbin.org/user-agent', {}, firefox);
-        expect(response.statusCode).toBe(200);
-        expect(response.body).toContain('Firefox'); // Look for Firefox in user-agent
-      }
+      const firefoxResponse = await curl.request('https://httpbin.org/user-agent', {}, 'firefox133-macos');
+      expect(firefoxResponse.statusCode).toBe(200);
+      expect(firefoxResponse.body).toContain('Firefox'); // Look for Firefox in user-agent
     }, 15000); // 15 second timeout
 
     it('should handle form data requests', async () => {
-      const browsers = curl.getAvailableBrowsers();
-      const browser = browsers.find(b => b.name === 'chrome99');
-      
       const response = await curl.request('https://httpbin.org/post', {
         method: 'POST',
         formData: {
           name: 'test',
           email: 'test@example.com'
         }
-      }, browser);
+      }, 'chrome136-macos');
 
       expect(response.statusCode).toBe(200);
       expect(response.body).toContain('"form"');
     });
 
     it('should handle file uploads', async () => {
-      const browsers = curl.getAvailableBrowsers();
-      const browser = browsers.find(b => b.name === 'chrome99');
-      
       const response = await curl.request('https://httpbin.org/post', {
         method: 'POST',
         formData: {
           file: Buffer.from('test file content')
         }
-      }, browser);
+      }, 'chrome136-macos');
 
       expect(response.statusCode).toBe(200);
     }, 10000); // 10 second timeout
   });
 
-  describe('Browser Discovery', () => {
-    it('should discover available browsers', () => {
-      const browsers = curl.getAvailableBrowsers();
-      expect(Array.isArray(browsers)).toBe(true);
-      expect(browsers.length).toBeGreaterThan(0);
-      expect(browsers.length).toBeGreaterThanOrEqual(30); // At least 30 binaries
+  describe('Default Fingerprint Behavior', () => {
+    it('should use default fingerprint when none specified', async () => {
+      const response = await curl.request('https://httpbin.org/get');
+      expect(response.statusCode).toBe(200);
     });
 
-    it('should find specific browser', () => {
-      const browser = curl.findBrowser('chrome', '99');
-      expect(browser).not.toBeNull();
-      expect(browser?.name).toBe('chrome99');
-      expect(browser?.version).toBe('99');
-    });
-
-    it('should find browser with platform', () => {
-      // Look for any Android Chrome version
-      const androidChrome = curl.getAvailableBrowsers().find(b => 
-        b.name.startsWith('chrome') && b.platform === 'android'
-      );
-      
-      if (androidChrome) {
-        expect(androidChrome.platform).toBe('android');
-        expect(androidChrome.os).toBe('android');
-      } else {
-        // If no Android Chrome found, test with a generated one
-        const generatedAndroid = curl.generateChromeFingerprint('131', 'android');
-        expect(generatedAndroid.platform).toBe('android');
-        expect(generatedAndroid.os).toBe('android');
-      }
-    });
-
-    it('should handle missing binaries gracefully', () => {
-      expect(() => new CurlImpersonate()).not.toThrow();
+    it('should throw error for invalid fingerprint', async () => {
+      await expect(curl.request('https://httpbin.org/get', {}, 'invalid-fingerprint'))
+        .rejects.toThrow('Fingerprint configuration not found: invalid-fingerprint');
     });
   });
 
   describe('Error Handling', () => {
-    it('should throw error when no browsers available for request', async () => {
-      const emptyCurl = new CurlImpersonate({
-        binariesPath: '/non-existent-path'
-      });
-      
-      await expect(emptyCurl.request('https://httpbin.org/get')).rejects.toThrow('No valid browser fingerprint found');
-    });
-
-    it('should throw error when no browsers available for JSON request', async () => {
-      const emptyCurl = new CurlImpersonate({
-        binariesPath: '/non-existent-path'
-      });
-      
-      await expect(emptyCurl.requestJson('https://httpbin.org/json')).rejects.toThrow('No valid browser fingerprint found');
-    });
-
     it('should handle network errors gracefully', async () => {
-      const browsers = curl.getAvailableBrowsers();
-      const browser = browsers.find(b => b.name === 'chrome99');
-      
       // Test with a URL that should actually fail
-      await expect(curl.request('https://this-domain-definitely-does-not-exist-12345-xyz.com', {}, browser))
+      await expect(curl.request('https://this-domain-definitely-does-not-exist-12345-xyz.com', {}, 'chrome136-macos'))
         .rejects.toMatchObject({
           code: 'CURLE_COULDNT_RESOLVE_HOST',
           curlCode: 6
@@ -245,10 +194,7 @@ describe('CurlImpersonate', () => {
 
   describe('Response Parsing', () => {
     it('should parse response headers correctly', async () => {
-      const browsers = curl.getAvailableBrowsers();
-      const browser = browsers.find(b => b.name === 'chrome99');
-      
-      const response = await curl.request('https://httpbin.org/headers', {}, browser);
+      const response = await curl.request('https://httpbin.org/headers', {}, 'chrome136-macos');
 
       // Handle potential 502 errors from httpbin.org
       expect([200]).toContain(response.statusCode);
@@ -259,10 +205,7 @@ describe('CurlImpersonate', () => {
     }, 10000); // 10 second timeout
 
     it('should parse response size and timing', async () => {
-      const browsers = curl.getAvailableBrowsers();
-      const browser = browsers.find(b => b.name === 'chrome99');
-      
-      const response = await curl.request('https://httpbin.org/get', {}, browser);
+      const response = await curl.request('https://httpbin.org/get', {}, 'chrome136-macos');
 
       expect(response.statusCode).toBe(200);
       expect(response.size).toBeGreaterThan(0);
@@ -270,10 +213,7 @@ describe('CurlImpersonate', () => {
     });
 
     it('should handle redirects', async () => {
-      const browsers = curl.getAvailableBrowsers();
-      const browser = browsers.find(b => b.name === 'chrome99');
-      
-      const response = await curl.request('https://httpbin.org/redirect/2', {}, browser);
+      const response = await curl.request('https://httpbin.org/redirect/2', {}, 'chrome136-macos');
 
       // Handle potential 502 errors from httpbin.org
       expect([200]).toContain(response.statusCode);
@@ -283,70 +223,25 @@ describe('CurlImpersonate', () => {
     }, 10000); // 10 second timeout
   });
 
-  describe('OS-Specific Headers and Flexible Versions', () => {
-    it('should generate Chrome fingerprint with OS-specific headers', () => {
-      const browsers = curl.getAvailableBrowsers();
-      const browser = browsers.find(b => b.name === 'chrome99');
-      
-      expect(browser).toBeDefined();
-      expect(browser?.os).toBeDefined();
-      expect(browser?.secChUaPlatform).toBeDefined();
-      expect(browser?.acceptLanguage).toBeDefined();
-      expect(browser?.acceptEncoding).toBeDefined();
+  describe('TLS and Cipher Configuration', () => {
+    it('should apply TLS configuration from fingerprint', async () => {
+      const fingerprint = curl.getFingerprintConfig('chrome136-macos');
+      expect(fingerprint?.tls.ciphers).toBeDefined();
+      expect(fingerprint?.tls.curves).toBeDefined();
+      expect(fingerprint?.tls.http2Settings).toBeDefined();
+      expect(fingerprint?.tls.echGrease).toBe(true);
+      expect(fingerprint?.tls.tlsv12).toBe(true);
     });
 
-    it('should generate custom Chrome version fingerprint', () => {
-      const customChrome = curl.generateChromeFingerprint('105', 'windows');
-      
-      expect(customChrome.name).toBe('chrome105');
-      expect(customChrome.version).toBe('105');
-      expect(customChrome.os).toBe('windows');
-      expect(customChrome.secChUaPlatform).toBe('"Windows"');
-      expect(customChrome.userAgent).toContain('Chrome/105.0.0.0');
-    });
+    it('should apply different TLS configurations for different browsers', async () => {
+      const chromeFingerprint = curl.getFingerprintConfig('chrome136-macos');
+      const firefoxFingerprint = curl.getFingerprintConfig('firefox133-macos');
 
-    it('should generate Chrome fingerprint for different OS', () => {
-      const macChrome = curl.generateChromeFingerprint('110', 'macos');
-      const androidChrome = curl.generateChromeFingerprint('115', 'android');
-      
-      expect(macChrome.os).toBe('macos');
-      expect(macChrome.secChUaPlatform).toBe('"macOS"');
-      expect(macChrome.userAgent).toContain('Macintosh');
-      
-      expect(androidChrome.os).toBe('android');
-      expect(androidChrome.secChUaPlatform).toBe('"Android"');
-      expect(androidChrome.userAgent).toContain('Android');
+      expect(chromeFingerprint?.tls.echGrease).toBe(true);
+      expect(firefoxFingerprint?.tls.echGrease).toBe(false);
+      expect(chromeFingerprint?.tls.alps).toBe(true);
+      expect(firefoxFingerprint?.tls.alps).toBe(false);
     });
-
-    it('should get random Chrome version', () => {
-      const randomVersion = curl.getRandomChromeVersion(99, 136);
-      const versionNum = parseInt(randomVersion, 10);
-      
-      expect(versionNum).toBeGreaterThanOrEqual(99);
-      expect(versionNum).toBeLessThanOrEqual(136);
-    });
-
-    it('should make request with custom Chrome version', async () => {
-      const customChrome = curl.generateChromeFingerprint('108', 'windows');
-      
-      const response = await curl.request('https://httpbin.org/user-agent', {}, customChrome);
-      
-      expect(response.statusCode).toBe(200);
-      expect(response.body).toContain('Chrome/108.0.0.0');
-    });
-
-    it('should make request with different OS Chrome versions', async () => {
-      const windowsChrome = curl.generateChromeFingerprint('112', 'windows');
-      const macChrome = curl.generateChromeFingerprint('118', 'macos');
-      
-      const response1 = await curl.request('https://httpbin.org/user-agent', {}, windowsChrome);
-      const response2 = await curl.request('https://httpbin.org/user-agent', {}, macChrome);
-      
-      expect(response1.statusCode).toBe(200);
-      expect(response2.statusCode).toBe(200);
-      expect(response1.body).toContain('Windows');
-      expect(response2.body).toContain('Macintosh');
-    }, 15000); // 15 second timeout
   });
 
   // NEW: Comprehensive CURL Error Handling Tests
@@ -370,7 +265,7 @@ describe('CurlImpersonate', () => {
         };
 
         try {
-          await curlImpersonate.request('https://httpbin.org/get', options);
+          await curlImpersonate.request('https://httpbin.org/get', options, 'chrome136-macos');
           fail('Expected error to be thrown');
         } catch (error: any) {
           // The error is a CurlError object
@@ -386,7 +281,7 @@ describe('CurlImpersonate', () => {
 
       test('should handle CURLE_COULDNT_RESOLVE_HOST (error code 6)', async () => {
         try {
-          await curlImpersonate.request('https://invalid-host-that-does-not-exist-12345.com');
+          await curlImpersonate.request('https://invalid-host-that-does-not-exist-12345.com', {}, 'chrome136-macos');
           fail('Expected error to be thrown');
         } catch (error: any) {
           expect(error).toBeDefined();
@@ -405,7 +300,7 @@ describe('CurlImpersonate', () => {
         };
 
         try {
-          await curlImpersonate.request('https://httpbin.org/delay/10', options);
+          await curlImpersonate.request('https://httpbin.org/delay/10', options, 'chrome136-macos');
           fail('Expected error to be thrown');
         } catch (error: any) {
           expect(error).toBeDefined();
@@ -421,7 +316,7 @@ describe('CurlImpersonate', () => {
       test('should handle CURLE_SSL_CONNECT_ERROR (error code 35)', async () => {
         try {
           // Try to connect to a server with invalid SSL
-          await curlImpersonate.request('https://expired.badssl.com/');
+          await curlImpersonate.request('https://expired.badssl.com/', {}, 'chrome136-macos');
           fail('Expected error to be thrown');
         } catch (error: any) {
           expect(error).toBeDefined();
@@ -543,7 +438,7 @@ describe('CurlImpersonate', () => {
     describe('Error Parsing Integration', () => {
       test('should parse errors with full context', async () => {
         try {
-          await curlImpersonate.request('https://invalid-host-that-does-not-exist-12345.com');
+          await curlImpersonate.request('https://invalid-host-that-does-not-exist-12345.com', {}, 'chrome136-macos');
           fail('Expected error to be thrown');
         } catch (error: any) {
           // The error is already a CurlError object, so parsing it again would be redundant
@@ -565,7 +460,7 @@ describe('CurlImpersonate', () => {
       try {
         await curlImpersonate.request('https://httpbin.org/get', {
           proxy: { host: 'invalid-proxy.com', port: 8080, protocol: 'http' }
-        });
+        }, 'chrome136-macos');
         fail('Expected proxy error');
       } catch (error: any) {
         expect(error.code).toBe('CURLE_COULDNT_RESOLVE_PROXY');
@@ -576,7 +471,7 @@ describe('CurlImpersonate', () => {
 
       // Test host resolution error (CURL error code 6)
       try {
-        await curlImpersonate.request('https://invalid-host-12345.com');
+        await curlImpersonate.request('https://invalid-host-12345.com', {}, 'chrome136-macos');
         fail('Expected host resolution error');
       } catch (error: any) {
         expect(error.code).toBe('CURLE_COULDNT_RESOLVE_HOST');

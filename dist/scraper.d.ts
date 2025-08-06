@@ -1,4 +1,5 @@
-import { ScrapingConfig, ScrapingSession, ScrapingResult, BatchScrapingResult, RequestOptions, BrowserFingerprint } from './types';
+import { ScrapingConfig, ScrapingSession, ScrapingResult, BatchScrapingResult, RequestOptions } from './types';
+import { FingerprintConfig } from './fingerprint-config';
 export declare class CurlScraper {
     private curlImpersonate;
     private config;
@@ -9,7 +10,7 @@ export declare class CurlScraper {
     /**
      * Create a new scraping session
      */
-    createSession(fingerprint?: BrowserFingerprint): ScrapingSession;
+    createSession(fingerprint?: FingerprintConfig): ScrapingSession;
     /**
      * Get or create a session
      */
@@ -19,7 +20,7 @@ export declare class CurlScraper {
      */
     scrape<T = any>(url: string, options?: RequestOptions): Promise<ScrapingResult<T>>;
     /**
-     * Make batch requests with multi-threading
+     * Make batch requests with concurrency control
      */
     batchScrape<T = any>(urls: string[], options?: RequestOptions): Promise<BatchScrapingResult>;
     /**
@@ -51,7 +52,7 @@ export declare class CurlScraper {
      */
     private isRetryableError;
     /**
-     * Parse error from curl-impersonate
+     * Parse error into CurlError format
      */
     private parseError;
     /**
@@ -59,19 +60,23 @@ export declare class CurlScraper {
      */
     private delay;
     /**
-     * Utility to chunk array for multi-threading
+     * Split array into chunks
      */
     private chunkArray;
     /**
-     * Get available browsers
+     * Get available fingerprints
      */
-    getAvailableBrowsers(): BrowserFingerprint[];
+    getAvailableFingerprints(): string[];
     /**
-     * Get scraping statistics
+     * Get statistics
      */
     getStats(): {
         sessions: number;
         config: ScrapingConfig;
     };
+    /**
+     * Get fingerprint name from configuration
+     */
+    private getFingerprintName;
 }
 //# sourceMappingURL=scraper.d.ts.map

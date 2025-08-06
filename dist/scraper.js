@@ -18,7 +18,7 @@ class CurlScraper {
             ...config
         };
         this.curlImpersonate = new curl_impersonate_1.CurlImpersonate({
-            binariesPath: '/Users/c0re/Software/curl-impersonate-v1.1.2.arm64-macos',
+            binariesPath: './binaries',
             defaultTimeout: this.config.timeout,
             defaultMaxRedirects: this.config.maxRedirects,
             defaultVerifySSL: this.config.verifySSL
@@ -29,12 +29,12 @@ class CurlScraper {
      */
     createSession(fingerprint) {
         const sessionId = (0, crypto_1.randomUUID)();
-        const availableBrowsers = this.curlImpersonate.getAvailableBrowsers();
-        const selectedFingerprint = fingerprint || availableBrowsers[Math.floor(Math.random() * availableBrowsers.length)];
+        const defaultFingerprint = this.curlImpersonate.getFingerprintConfig('chrome136-macos');
+        const selectedFingerprint = fingerprint || defaultFingerprint;
         const session = {
             id: sessionId,
             cookies: {},
-            userAgent: selectedFingerprint.userAgent,
+            userAgent: selectedFingerprint.headers['User-Agent'],
             fingerprint: selectedFingerprint,
             retryCount: 0,
             lastRequestTime: Date.now()
@@ -79,45 +79,36 @@ class CurlScraper {
                         ...options.headers
                     }
                 };
+                // Get fingerprint name
+                const fingerprintName = this.getFingerprintName(session.fingerprint);
                 // Make request
-                const response = await this.curlImpersonate.request(url, requestOptions, session.fingerprint);
-                // Check for Cloudflare challenge
+                const response = await this.curlImpersonate.request(url, requestOptions, fingerprintName);
+                // Update session
+                session.lastRequestTime = Date.now();
+                this.updateSessionCookies(session, response);
+                // Check for Cloudflare challenges
                 if (this.isCloudflareChallenge(response)) {
-                    const bypassResult = await this.handleCloudflareChallenge(url, response, session);
-                    if (bypassResult.success) {
-                        return {
-                            success: true,
-                            data: bypassResult.data,
-                            session,
-                            response: bypassResult.response,
-                            attempts,
-                            duration: Date.now() - startTime
-                        };
+                    const challengeResult = await this.handleCloudflareChallenge(url, response, session);
+                    if (challengeResult.success) {
+                        return challengeResult;
                     }
-                    lastError = bypassResult.error;
                     continue;
                 }
-                // Update session cookies
-                this.updateSessionCookies(session, response);
-                // Parse JSON if needed
+                // Parse response
                 let data;
-                if (options.json !== false && this.isJsonResponse(response)) {
+                if (this.isJsonResponse(response)) {
                     try {
                         data = JSON.parse(response.body);
                     }
                     catch (error) {
-                        // Not JSON, return body as string
-                        data = response.body;
+                        console.warn('Failed to parse JSON response:', error);
                     }
-                }
-                else {
-                    data = response.body;
                 }
                 return {
                     success: true,
                     data,
-                    session,
                     response,
+                    session,
                     attempts,
                     duration: Date.now() - startTime
                 };
@@ -128,7 +119,7 @@ class CurlScraper {
                 if (!this.isRetryableError(lastError)) {
                     break;
                 }
-                // Wait before retry
+                // Delay before retry
                 if (attempts < (this.config.maxRetries || 3)) {
                     await this.delay(this.config.retryDelay || 1000);
                 }
@@ -142,40 +133,42 @@ class CurlScraper {
         };
     }
     /**
-     * Make batch requests with multi-threading
+     * Make batch requests with concurrency control
      */
     async batchScrape(urls, options = {}) {
-        const results = [];
         const startTime = Date.now();
+        const results = [];
+        let successfulRequests = 0;
+        let failedRequests = 0;
         let cloudflareChallenges = 0;
         let proxyFailures = 0;
-        if (this.config.multiThreading?.enabled) {
-            // Multi-threaded scraping
-            const maxWorkers = this.config.multiThreading.maxWorkers || 4;
-            const chunks = this.chunkArray(urls, Math.ceil(urls.length / maxWorkers));
-            const promises = chunks.map(chunk => Promise.all(chunk.map(url => this.scrape(url, options))));
-            const chunkResults = await Promise.all(promises);
-            results.push(...chunkResults.flat());
-        }
-        else {
-            // Sequential scraping
-            for (const url of urls) {
-                const result = await this.scrape(url, options);
+        // Configure concurrency
+        const maxConcurrent = this.config.multiThreading?.maxWorkers || 5;
+        const chunks = this.chunkArray(urls, maxConcurrent);
+        for (const chunk of chunks) {
+            const chunkPromises = chunk.map(url => this.scrape(url, options));
+            const chunkResults = await Promise.all(chunkPromises);
+            for (const result of chunkResults) {
                 results.push(result);
-                if (result.response?.cloudflareChallenge) {
-                    cloudflareChallenges++;
+                if (result.success) {
+                    successfulRequests++;
                 }
-                if (result.error?.proxyFailed) {
-                    proxyFailures++;
+                else {
+                    failedRequests++;
+                    if (result.error?.code?.includes('CF_')) {
+                        cloudflareChallenges++;
+                    }
+                    if (result.error?.proxyFailed) {
+                        proxyFailures++;
+                    }
                 }
             }
         }
-        const successfulRequests = results.filter(r => r.success).length;
-        const failedRequests = results.filter(r => !r.success).length;
-        const averageResponseTime = results.reduce((sum, r) => sum + r.duration, 0) / results.length;
+        const totalRequests = results.length;
+        const averageResponseTime = results.reduce((sum, result) => sum + result.duration, 0) / totalRequests;
         return {
             results,
-            totalRequests: urls.length,
+            totalRequests,
             successfulRequests,
             failedRequests,
             averageResponseTime,
@@ -187,59 +180,30 @@ class CurlScraper {
      * Check if response is a Cloudflare challenge
      */
     isCloudflareChallenge(response) {
-        const cloudflareIndicators = [
-            'cloudflare',
-            'cf-ray',
-            'cf-cache-status',
-            'cf-request-id',
-            'challenge-platform',
-            'cf-browser-verification'
-        ];
-        const headers = Object.keys(response.headers).map(h => h.toLowerCase());
-        const body = response.body.toLowerCase();
-        return (response.statusCode === 403 ||
-            response.statusCode === 503 ||
-            headers.some(h => cloudflareIndicators.some(indicator => h.includes(indicator))) ||
-            body.includes('cloudflare') ||
-            body.includes('checking your browser') ||
-            body.includes('ddos protection'));
+        return response.statusCode === 403 ||
+            response.statusCode === 429 ||
+            response.body.includes('cloudflare') ||
+            response.body.includes('cf-browser-verification') ||
+            response.body.includes('cf_challenge');
     }
     /**
      * Handle Cloudflare challenge
      */
     async handleCloudflareChallenge(url, response, session) {
-        const cloudflareConfig = this.config.cloudflareBypass;
-        if (!cloudflareConfig?.enabled) {
-            return {
-                success: false,
-                error: {
-                    code: 'CLOUDFLARE_BLOCKED',
-                    message: 'Cloudflare challenge detected but bypass is disabled',
-                    cloudflareBlocked: true,
-                    retryable: false
-                },
-                attempts: 1,
-                duration: 0
-            };
-        }
-        // For now, return the challenge info
-        // In a real implementation, you'd solve the challenge here
+        // For now, we'll just return an error
+        // In a real implementation, you might want to:
+        // 1. Parse the challenge page
+        // 2. Execute JavaScript if needed
+        // 3. Submit the challenge response
+        // 4. Retry the original request
         return {
             success: false,
             error: {
-                code: 'CLOUDFLARE_CHALLENGE',
+                code: 'CF_CHALLENGE',
                 message: 'Cloudflare challenge detected',
+                details: 'Challenge handling not implemented',
                 cloudflareBlocked: true,
                 retryable: true
-            },
-            response: {
-                ...response,
-                cloudflareChallenge: {
-                    type: 'js',
-                    url: response.url,
-                    cookies: session.cookies,
-                    timeout: cloudflareConfig.challengeTimeout || 30000
-                }
             },
             attempts: 1,
             duration: 0
@@ -249,44 +213,39 @@ class CurlScraper {
      * Get next proxy from rotation
      */
     async getNextProxy() {
-        const proxyConfig = this.config.proxyRotation;
-        if (!proxyConfig?.enabled || !proxyConfig.proxies.length) {
+        if (!this.config.proxyRotation?.enabled || !this.config.proxyRotation.proxies.length) {
             return undefined;
         }
-        const availableProxies = proxyConfig.proxies.filter(p => !p.failCount || p.failCount < (proxyConfig.maxFailures || 3));
+        const proxies = this.config.proxyRotation.proxies;
+        const availableProxies = proxies.filter(p => !p.failCount || p.failCount < (this.config.proxyRotation?.maxFailures || 3));
         if (!availableProxies.length) {
             return undefined;
         }
-        let selectedProxy;
-        switch (proxyConfig.rotationStrategy) {
+        switch (this.config.proxyRotation?.rotationStrategy || 'round-robin') {
             case 'round-robin':
-                selectedProxy = availableProxies[this.proxyIndex % availableProxies.length];
+                const proxy = availableProxies[this.proxyIndex % availableProxies.length];
                 this.proxyIndex++;
-                break;
+                return proxy;
             case 'random':
-                selectedProxy = availableProxies[Math.floor(Math.random() * availableProxies.length)];
-                break;
+                return availableProxies[Math.floor(Math.random() * availableProxies.length)];
             case 'failover':
-                selectedProxy = availableProxies[0];
-                break;
+                return availableProxies[0];
             default:
-                selectedProxy = availableProxies[0];
+                return availableProxies[0];
         }
-        selectedProxy.lastUsed = Date.now();
-        return selectedProxy;
     }
     /**
      * Handle rate limiting
      */
     async handleRateLimiting() {
-        const rateConfig = this.config.rateLimiting;
-        if (!rateConfig?.enabled) {
+        if (!this.config.rateLimiting?.enabled) {
             return;
         }
         const now = Date.now();
         const timeSinceLastRequest = now - this.lastRequestTime;
-        if (rateConfig.delayBetweenRequests && timeSinceLastRequest < rateConfig.delayBetweenRequests) {
-            await this.delay(rateConfig.delayBetweenRequests - timeSinceLastRequest);
+        const minDelay = this.config.rateLimiting.delayBetweenRequests || 1000;
+        if (timeSinceLastRequest < minDelay) {
+            await this.delay(minDelay - timeSinceLastRequest);
         }
         this.lastRequestTime = Date.now();
     }
@@ -294,16 +253,16 @@ class CurlScraper {
      * Update session cookies from response
      */
     updateSessionCookies(session, response) {
-        const setCookieHeaders = response.headers['set-cookie'] || response.headers['Set-Cookie'];
+        const setCookieHeaders = response.headers['set-cookie'];
         if (setCookieHeaders) {
             const cookies = Array.isArray(setCookieHeaders) ? setCookieHeaders : [setCookieHeaders];
-            for (const cookie of cookies) {
+            cookies.forEach(cookie => {
                 const [nameValue] = cookie.split(';');
                 const [name, value] = nameValue.split('=');
                 if (name && value) {
                     session.cookies[name.trim()] = value.trim();
                 }
-            }
+            });
         }
     }
     /**
@@ -312,26 +271,26 @@ class CurlScraper {
     isJsonResponse(response) {
         const contentType = response.headers['content-type'] || '';
         return contentType.includes('application/json') ||
-            response.body.trim().startsWith('{') ||
-            response.body.trim().startsWith('[');
+            response.body.startsWith('{') ||
+            response.body.startsWith('[');
     }
     /**
      * Check if error is retryable
      */
     isRetryableError(error) {
-        return error.retryable !== false &&
-            !error.cloudflareBlocked &&
-            !error.proxyFailed;
+        return error.retryable !== false;
     }
     /**
-     * Parse error from curl-impersonate
+     * Parse error into CurlError format
      */
     parseError(error) {
+        if (error.code && error.message) {
+            return error;
+        }
         return {
-            code: 'CURL_ERROR',
+            code: 'UNKNOWN_ERROR',
             message: error.message || 'Unknown error',
-            details: error.stack,
-            retryable: true
+            details: error.stack
         };
     }
     /**
@@ -341,7 +300,7 @@ class CurlScraper {
         return new Promise(resolve => setTimeout(resolve, ms));
     }
     /**
-     * Utility to chunk array for multi-threading
+     * Split array into chunks
      */
     chunkArray(array, size) {
         const chunks = [];
@@ -351,19 +310,25 @@ class CurlScraper {
         return chunks;
     }
     /**
-     * Get available browsers
+     * Get available fingerprints
      */
-    getAvailableBrowsers() {
-        return this.curlImpersonate.getAvailableBrowsers();
+    getAvailableFingerprints() {
+        return this.curlImpersonate.getAvailableFingerprints();
     }
     /**
-     * Get scraping statistics
+     * Get statistics
      */
     getStats() {
         return {
             sessions: this.sessions.size,
             config: this.config
         };
+    }
+    /**
+     * Get fingerprint name from configuration
+     */
+    getFingerprintName(fingerprint) {
+        return `${fingerprint.browser}${fingerprint.version}-${fingerprint.os}`;
     }
 }
 exports.CurlScraper = CurlScraper;

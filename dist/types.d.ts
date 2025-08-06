@@ -2,7 +2,7 @@ export interface ScrapingSession {
     id: string;
     cookies: Record<string, string>;
     userAgent: string;
-    fingerprint: BrowserFingerprint;
+    fingerprint: any;
     proxy?: ProxyConfig;
     retryCount: number;
     lastRequestTime: number;
@@ -15,7 +15,7 @@ export interface ScrapingConfig {
     maxRedirects?: number;
     verifySSL?: boolean;
     userAgents?: string[];
-    fingerprints?: BrowserFingerprint[];
+    fingerprints?: string[];
     proxyRotation?: ProxyRotationConfig;
     cloudflareBypass?: CloudflareBypassConfig;
     rateLimiting?: RateLimitingConfig;
@@ -70,17 +70,6 @@ export interface MultiThreadingConfig {
     queueSize?: number;
     loadBalancing?: 'round-robin' | 'least-busy' | 'random';
 }
-export interface BrowserFingerprint {
-    name: string;
-    version: string;
-    platform?: 'desktop' | 'mobile' | 'ios' | 'android';
-    os?: 'windows' | 'macos' | 'ios' | 'android' | 'linux';
-    userAgent: string;
-    binaryName: string;
-    secChUaPlatform?: string;
-    acceptLanguage?: string;
-    acceptEncoding?: string;
-}
 export interface RequestOptions {
     method?: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' | 'HEAD' | 'OPTIONS';
     headers?: Record<string, string>;
@@ -125,26 +114,11 @@ export declare const CURL_ERROR_CODES: Record<number, {
     description: string;
     retryable: boolean;
 }>;
-export type BrowserType = 'chrome' | 'firefox' | 'safari' | 'edge' | 'tor';
-export type OSPlatform = 'windows' | 'macos' | 'ios' | 'android' | 'linux';
-export interface BrowserVersion {
-    type: BrowserType;
-    version: string;
-    platform?: 'desktop' | 'mobile' | 'ios' | 'android';
-    os?: OSPlatform;
-}
 export interface CurlImpersonateConfig {
     binariesPath?: string;
     defaultTimeout?: number;
     defaultMaxRedirects?: number;
     defaultVerifySSL?: boolean;
-}
-export interface VersionGenerator {
-    browser: BrowserType;
-    minVersion: number;
-    maxVersion: number;
-    os: OSPlatform;
-    platform?: 'desktop' | 'mobile' | 'ios' | 'android';
 }
 export interface ScrapingResult<T = any> {
     success: boolean;

@@ -1,4 +1,5 @@
-import { BrowserFingerprint, RequestOptions, HttpResponse } from './types';
+import { RequestOptions, HttpResponse } from './types';
+import { FingerprintConfig } from './fingerprint-config';
 export interface HtmlParseOptions {
     encoding?: string;
     normalizeWhitespace?: boolean;
@@ -68,7 +69,7 @@ export interface ScrapingSession {
     id: string;
     cookies: Record<string, string>;
     userAgent: string;
-    fingerprint: BrowserFingerprint;
+    fingerprint: FingerprintConfig;
     proxy?: ProxyConfig;
     createdAt: number;
     lastUsed: number;
@@ -87,129 +88,44 @@ export declare class CloudflareScraper {
     private proxyIndex;
     private config;
     constructor(config?: CloudflareScraperConfig);
-    /**
-     * Create a new session
-     */
-    createSession(fingerprint?: BrowserFingerprint): ScrapingSession;
-    /**
-     * Get or create session based on configuration
-     */
+    createSession(fingerprint?: FingerprintConfig): ScrapingSession;
     getSession(sessionId?: string, forceNew?: boolean): ScrapingSession;
-    /**
-     * Make request with Cloudflare and proxy error handling
-     */
     request(url: string, options?: RequestOptions, sessionId?: string): Promise<HttpResponse>;
+    private getFingerprintName;
+    private isSessionExpired;
     private isCloudflareBlocked;
-    /**
-     * Check if response is a Cloudflare challenge
-     */
     private isCloudflareChallenge;
-    /**
-     * Handle Cloudflare challenge
-     */
     private handleCloudflareChallenge;
-    /**
-     * Check if error is proxy-related
-     */
     private isProxyError;
-    /**
-     * Handle proxy errors
-     */
     private handleProxyError;
-    /**
-     * Check if error is Cloudflare-related
-     */
     private isCloudflareError;
-    /**
-     * Get next proxy from rotation
-     */
     private getNextProxy;
-    /**
-     * Mark proxy as failed
-     */
     private markProxyFailed;
-    /**
-     * Rotate session (new fingerprint)
-     */
     private rotateSession;
-    /**
-     * Update session cookies from response
-     */
     private updateSessionCookies;
-    /**
-     * Utility to delay execution
-     */
     private delay;
-    /**
-     * Get available browsers
-     */
-    getAvailableBrowsers(): BrowserFingerprint[];
-    /**
-     * Get session statistics
-     */
+    getAvailableFingerprints(): string[];
     getSessionStats(): {
         total: number;
         active: number;
         expired: number;
     };
-    /**
-     * Clean expired sessions
-     */
     cleanExpiredSessions(): number;
-    /**
-     * Get complete session state for persistence
-     */
     getSessionState(sessionId?: string): any;
-    /**
-     * Restore complete session state from persistence
-     */
     restoreSessionState(sessionState: any): void;
-    /**
-     * Get session cookies for persistence (backward compatibility)
-     */
     getSessionCookies(sessionId?: string): Record<string, string>;
-    /**
-     * Restore session cookies from persistence (backward compatibility)
-     */
     restoreSessionCookies(cookies: Record<string, string>, sessionId?: string): void;
-    /**
-     * Check if response is HTML
-     */
     isHtmlResponse(response: HttpResponse): boolean;
-    /**
-     * Parse HTML response and return structured data
-     */
     parseHtml(response: HttpResponse, options?: HtmlParseOptions): HtmlParseResult;
-    /**
-     * Convert node-html-parser node to our HtmlElement interface
-     */
     private convertNodeToElements;
-    /**
-     * Get element by ID using node-html-parser
-     */
     private getElementById;
-    /**
-     * Query selector using node-html-parser
-     */
     private querySelector;
-    /**
-     * Query selector all using node-html-parser
-     */
     private querySelectorAll;
-    /**
-     * Get script data from specific script tag
-     */
     private getScriptData;
-    /**
-     * Make request and parse HTML response
-     */
     requestHtml(url: string, options?: RequestOptions, sessionId?: string): Promise<{
         response: HttpResponse;
         html: HtmlParseResult;
     }>;
-    /**
-     * Make request and extract data from specific script tag
-     */
     requestScriptData(url: string, scriptId?: string, options?: RequestOptions, sessionId?: string): Promise<any>;
 }
 //# sourceMappingURL=cloudflare-scraper.d.ts.map

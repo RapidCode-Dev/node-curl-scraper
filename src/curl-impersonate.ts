@@ -1,24 +1,23 @@
 import { spawn, SpawnOptions } from 'child_process';
-import { readdirSync, statSync } from 'fs';
 import { join } from 'path';
 import { debugLogger } from './debug';
 import { 
-  BrowserFingerprint, 
   RequestOptions, 
   HttpResponse, 
   JsonResponse, 
   CurlError, 
-  BrowserType, 
-  BrowserVersion,
   CurlImpersonateConfig,
-  OSPlatform,
-  VersionGenerator,
   CURL_ERROR_CODES
 } from './types';
+import { 
+  FingerprintConfig, 
+  getFingerprintConfig, 
+  getAvailableFingerprints, 
+  findFingerprintByBrowser 
+} from './fingerprint-config';
 
 export class CurlImpersonate {
-  private binariesPath: string;
-  private availableBrowsers: BrowserFingerprint[] = [];
+  private binaryPath: string;
   private config: CurlImpersonateConfig;
 
   constructor(config: CurlImpersonateConfig = {}) {
@@ -29,292 +28,48 @@ export class CurlImpersonate {
       defaultVerifySSL: true,
       ...config
     };
-    this.binariesPath = this.config.binariesPath!;
-    this.discoverBinaries();
+    this.binaryPath = join(this.config.binariesPath!, 'curl-impersonate');
   }
 
   /**
-   * Discover available curl-impersonate binaries
+   * Get available fingerprint configurations
    */
-  private discoverBinaries(): void {
-    try {
-      const files = readdirSync(this.binariesPath);
-      this.availableBrowsers = files
-        .filter(file => {
-          const filePath = join(this.binariesPath, file);
-          return statSync(filePath).isFile() && file.startsWith('curl_');
-        })
-        .map(filename => this.parseBinaryName(filename))
-        .filter(browser => browser !== null) as BrowserFingerprint[];
-    } catch (error) {
-      console.warn(`Could not discover binaries in ${this.binariesPath}:`, error);
-      this.availableBrowsers = [];
-    }
+  getAvailableFingerprints(): string[] {
+    return getAvailableFingerprints();
   }
 
   /**
-   * Parse binary filename to extract browser fingerprint
+   * Get a specific fingerprint configuration
    */
-  private parseBinaryName(filename: string): BrowserFingerprint | null {
-    // Remove 'curl_' prefix
-    const name = filename.replace('curl_', '');
-    
-    // Parse Chrome versions
-    if (name.startsWith('chrome')) {
-      const version = name.replace('chrome', '');
-      const platform = this.detectPlatform(version);
-      const os = this.detectOS(version);
-      
-      return {
-        name: `chrome${version}`,
-        version,
-        platform,
-        os,
-        userAgent: this.generateUserAgent('chrome', version, platform, os),
-        binaryName: filename,
-        secChUaPlatform: this.getSecChUaPlatform(os),
-        acceptLanguage: this.getAcceptLanguage(os),
-        acceptEncoding: this.getAcceptEncoding(os)
-      };
-    }
-    
-    // Parse Firefox versions
-    if (name.startsWith('firefox')) {
-      const version = name.replace('firefox', '');
-      return {
-        name: `firefox${version}`,
-        version,
-        platform: 'desktop',
-        os: 'macos',
-        userAgent: this.generateUserAgent('firefox', version, 'desktop', 'macos'),
-        binaryName: filename,
-        secChUaPlatform: this.getSecChUaPlatform('macos'),
-        acceptLanguage: this.getAcceptLanguage('macos'),
-        acceptEncoding: this.getAcceptEncoding('macos')
-      };
-    }
-    
-    // Parse Safari versions
-    if (name.startsWith('safari')) {
-      const version = name.replace('safari', '');
-      const platform = version.includes('ios') ? 'ios' : 'desktop';
-      const os = version.includes('ios') ? 'ios' : 'macos';
-      const cleanVersion = version.replace('_ios', '');
-      
-      return {
-        name: `safari${version}`,
-        version: cleanVersion,
-        platform,
-        os,
-        userAgent: this.generateUserAgent('safari', cleanVersion, platform, os),
-        binaryName: filename,
-        secChUaPlatform: this.getSecChUaPlatform(os),
-        acceptLanguage: this.getAcceptLanguage(os),
-        acceptEncoding: this.getAcceptEncoding(os)
-      };
-    }
-    
-    // Parse Edge versions
-    if (name.startsWith('edge')) {
-      const version = name.replace('edge', '');
-      return {
-        name: `edge${version}`,
-        version,
-        platform: 'desktop',
-        os: 'windows',
-        userAgent: this.generateUserAgent('edge', version, 'desktop', 'windows'),
-        binaryName: filename,
-        secChUaPlatform: this.getSecChUaPlatform('windows'),
-        acceptLanguage: this.getAcceptLanguage('windows'),
-        acceptEncoding: this.getAcceptEncoding('windows')
-      };
-    }
-    
-    // Parse Tor versions
-    if (name.startsWith('tor')) {
-      const version = name.replace('tor', '');
-      return {
-        name: `tor${version}`,
-        version,
-        platform: 'desktop',
-        os: 'macos',
-        userAgent: this.generateUserAgent('tor', version, 'desktop', 'macos'),
-        binaryName: filename,
-        secChUaPlatform: this.getSecChUaPlatform('macos'),
-        acceptLanguage: this.getAcceptLanguage('macos'),
-        acceptEncoding: this.getAcceptEncoding('macos')
-      };
-    }
-    
-    return null;
+  getFingerprintConfig(name: string): FingerprintConfig | null {
+    return getFingerprintConfig(name);
   }
 
   /**
-   * Detect platform from version string
+   * Find fingerprint by browser, version, and OS
    */
-  private detectPlatform(version: string): 'desktop' | 'mobile' | 'ios' | 'android' {
-    if (version.includes('android')) return 'android';
-    if (version.includes('ios')) return 'ios';
-    if (version.includes('mobile')) return 'mobile';
-    return 'desktop';
+  findFingerprintByBrowser(
+    browser: string, 
+    version?: string, 
+    os?: string
+  ): FingerprintConfig | null {
+    return findFingerprintByBrowser(browser, version, os);
   }
 
   /**
-   * Detect OS from version string
-   */
-  private detectOS(version: string): OSPlatform {
-    if (version.includes('android')) return 'android';
-    if (version.includes('ios')) return 'ios';
-    if (version.includes('macos')) return 'macos';
-    if (version.includes('linux')) return 'linux';
-    return 'windows'; // Default for Chrome
-  }
-
-  /**
-   * Generate User-Agent string with OS-specific details
-   */
-  private generateUserAgent(type: BrowserType, version: string, platform: string, os: OSPlatform): string {
-    const baseVersions: Record<string, string> = {
-      'chrome': '99.0.4844.51',
-      'firefox': '133.0.3',
-      'safari': '17.0',
-      'edge': '99.0.1150.30',
-      'tor': '14.5'
-    };
-
-    const baseVersion = baseVersions[type] || '99.0.0.0';
-    
-    switch (type) {
-      case 'chrome':
-        if (os === 'windows') {
-          return `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${version}.0.0.0 Safari/537.36`;
-        } else if (os === 'macos') {
-          return `Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${version}.0.0.0 Safari/537.36`;
-        } else if (os === 'android') {
-          return `Mozilla/5.0 (Linux; Android 12; SM-G991B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${version}.0.0.0 Mobile Safari/537.36`;
-        }
-        break;
-        
-      case 'firefox':
-        return `Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:${version}) Gecko/20100101 Firefox/${version}`;
-        
-      case 'safari':
-        if (os === 'ios') {
-          return `Mozilla/5.0 (iPhone; CPU iPhone OS 17_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/${version} Mobile/15E148 Safari/604.1`;
-        } else {
-          return `Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/${version} Safari/605.1.15`;
-        }
-        
-      case 'edge':
-        return `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${version}.0.0.0 Safari/537.36 Edg/${version}.0.0.0`;
-        
-      case 'tor':
-        return `Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:${version}) Gecko/20100101 Firefox/${version}`;
-    }
-    
-    return `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${version}.0.0.0 Safari/537.36`;
-  }
-
-  /**
-   * Get sec-ch-ua-platform header value
-   */
-  private getSecChUaPlatform(os: OSPlatform): string {
-    switch (os) {
-      case 'windows': return '"Windows"';
-      case 'macos': return '"macOS"';
-      case 'ios': return '"iOS"';
-      case 'android': return '"Android"';
-      case 'linux': return '"Linux"';
-      default: return '"Windows"';
-    }
-  }
-
-  /**
-   * Get Accept-Language header value
-   */
-  private getAcceptLanguage(os: OSPlatform): string {
-    switch (os) {
-      case 'windows': return 'en-US,en;q=0.9';
-      case 'macos': return 'en-US,en;q=0.9';
-      case 'ios': return 'en-US,en;q=0.9';
-      case 'android': return 'en-US,en;q=0.9';
-      case 'linux': return 'en-US,en;q=0.9';
-      default: return 'en-US,en;q=0.9';
-    }
-  }
-
-  /**
-   * Get Accept-Encoding header value
-   */
-  private getAcceptEncoding(os: OSPlatform): string {
-    switch (os) {
-      case 'windows': return 'gzip, deflate, br';
-      case 'macos': return 'gzip, deflate, br';
-      case 'ios': return 'gzip, deflate, br';
-      case 'android': return 'gzip, deflate, br';
-      case 'linux': return 'gzip, deflate, br';
-      default: return 'gzip, deflate, br';
-    }
-  }
-
-  /**
-   * Get available browsers
-   */
-  getAvailableBrowsers(): BrowserFingerprint[] {
-    return [...this.availableBrowsers];
-  }
-
-  /**
-   * Find specific browser by type, version, and platform
-   */
-  findBrowser(type: BrowserType, version: string, platform?: string, os?: OSPlatform): BrowserFingerprint | null {
-    return this.availableBrowsers.find(browser => {
-      const nameMatch = browser.name.startsWith(type);
-      const versionMatch = browser.version === version;
-      const platformMatch = !platform || browser.platform === platform;
-      const osMatch = !os || browser.os === os;
-      return nameMatch && versionMatch && platformMatch && osMatch;
-    }) || null;
-  }
-
-  /**
-   * Generate a custom browser fingerprint for any Chrome version
-   * This allows using any Chrome version even if the binary doesn't exist
-   */
-  generateChromeFingerprint(version: string, os: OSPlatform = 'windows'): BrowserFingerprint {
-    const platform = os === 'android' ? 'android' : 'desktop';
-    
-    return {
-      name: `chrome${version}`,
-      version,
-      platform,
-      os,
-      userAgent: this.generateUserAgent('chrome', version, platform, os),
-      binaryName: 'curl_chrome99', // Use existing binary
-      secChUaPlatform: this.getSecChUaPlatform(os),
-      acceptLanguage: this.getAcceptLanguage(os),
-      acceptEncoding: this.getAcceptEncoding(os)
-    };
-  }
-
-  /**
-   * Get a random Chrome version between min and max
-   */
-  getRandomChromeVersion(minVersion: number = 99, maxVersion: number = 136): string {
-    return Math.floor(Math.random() * (maxVersion - minVersion + 1) + minVersion).toString();
-  }
-
-  /**
-   * Make HTTP request
+   * Make HTTP request with fingerprint configuration
    */
   async request(
     url: string, 
     options: RequestOptions = {}, 
-    browser?: BrowserFingerprint | BrowserVersion
+    fingerprintName?: string
   ): Promise<HttpResponse> {
-    const fingerprint = this.resolveBrowser(browser);
+    const fingerprint = fingerprintName ? 
+      getFingerprintConfig(fingerprintName) : 
+      getFingerprintConfig('chrome136-macos'); // Default fingerprint
+
     if (!fingerprint) {
-      throw new Error('No valid browser fingerprint found');
+      throw new Error(`Fingerprint configuration not found: ${fingerprintName || 'default'}`);
     }
 
     // Debug logging
@@ -329,7 +84,7 @@ export class CurlImpersonate {
       
       const response = this.parseResponse(result, url, endTime - startTime, options);
       
-      // Debug logging with file saving (only if not called from CloudflareScraper)
+      // Debug logging with file saving
       debugLogger.logResponseWithFile(response, endTime - startTime, 'curl-response', false);
       
       return response;
@@ -346,9 +101,9 @@ export class CurlImpersonate {
   async requestJson<T = any>(
     url: string, 
     options: RequestOptions = {}, 
-    browser?: BrowserFingerprint | BrowserVersion
+    fingerprintName?: string
   ): Promise<JsonResponse<T>> {
-    const response = await this.request(url, options, browser);
+    const response = await this.request(url, options, fingerprintName);
     
     try {
       const data = JSON.parse(response.body);
@@ -359,73 +114,98 @@ export class CurlImpersonate {
   }
 
   /**
-   * Resolve browser fingerprint from various input types
+   * Build curl command arguments with fingerprint configuration
    */
-  private resolveBrowser(browser?: BrowserFingerprint | BrowserVersion): BrowserFingerprint | null {
-    if (!browser) {
-      // Return first available browser
-      return this.availableBrowsers[0] || null;
-    }
-
-    if ('binaryName' in browser) {
-      // Already a BrowserFingerprint
-      return browser;
-    }
-
-    // BrowserVersion - find matching fingerprint or generate one
-    if (browser.type === 'chrome') {
-      // For Chrome, we can generate any version
-      return this.generateChromeFingerprint(browser.version, browser.os);
-    }
-    
-    return this.findBrowser(browser.type, browser.version, browser.platform, browser.os);
-  }
-
-  /**
-   * Build curl command arguments with OS-specific headers
-   */
-  private buildCurlArgs(url: string, options: RequestOptions, fingerprint: BrowserFingerprint): string[] {
+  private buildCurlArgs(url: string, options: RequestOptions, fingerprint: FingerprintConfig): string[] {
     const args: string[] = [];
 
-    // Basic options - include headers in output
-    args.push('-s', '-i', '-w', '\\n%{http_code}|%{http_version}|%{size_download}|%{time_total}|%{url_effective}');
+    // Basic options - include headers in output and verbose for request headers
+    args.push('-v', '-i', '-w', '\\n%{http_code}|%{http_version}|%{size_download}|%{time_total}|%{url_effective}');
     
     // Method
     if (options.method && options.method !== 'GET') {
       args.push('-X', options.method);
     }
 
-    // Note: curl-impersonate binary automatically adds browser headers
-    // We should not add any browser-specific headers for curl-impersonate binaries
-    let browserHeadersAdded = false;
-    
-    // For curl-impersonate binaries, NEVER add browser-specific headers as they handle them automatically
-    if (fingerprint.binaryName?.startsWith('curl_')) {
-      // Skip all browser-specific headers for curl-impersonate binaries
-      browserHeadersAdded = true; // Mark as added to prevent them from being added in the custom headers loop
-    } else if (options.headers?.['User-Agent']) {
-      // Only add User-Agent for custom fingerprints when explicitly provided
-      args.push('-H', `User-Agent: ${options.headers['User-Agent']}`);
-      browserHeadersAdded = true;
-    } else if (fingerprint.userAgent) {
-      // Only add User-Agent for custom fingerprints when not using curl-impersonate binaries
-      args.push('-H', `User-Agent: ${fingerprint.userAgent}`);
-      browserHeadersAdded = true;
-    }
-
-    // Don't add OS-specific headers as curl-impersonate binary handles them automatically
-    // Only add custom headers that aren't browser-specific
-
-    // Custom headers (excluding browser-specific headers if already handled)
+    // Custom headers (can override fingerprint headers) - add first
     if (options.headers) {
       for (const [key, value] of Object.entries(options.headers)) {
-        // Skip browser-specific headers if we're using curl-impersonate binaries
-        if (browserHeadersAdded && this.isBrowserSpecificHeader(key)) {
-          continue;
-        }
         args.push('-H', `${key}: ${value}`);
       }
     }
+
+    // Add fingerprint headers (skip if overridden by custom headers)
+    for (const [key, value] of Object.entries(fingerprint.headers)) {
+      if (value && (!options.headers || !(key in options.headers))) { // Only add if not overridden
+        args.push('-H', `${key}: ${value}`);
+      }
+    }
+
+    // Add TLS/Cipher configuration
+    args.push('--ciphers', fingerprint.tls.ciphers);
+    args.push('--curves', fingerprint.tls.curves);
+    args.push('--http2');
+    args.push('--http2-settings', fingerprint.tls.http2Settings);
+    args.push('--http2-window-update', String(fingerprint.tls.http2WindowUpdate));
+    args.push('--http2-stream-weight', String(fingerprint.tls.http2StreamWeight));
+    args.push('--http2-stream-exclusive', String(fingerprint.tls.http2StreamExclusive));
+    args.push('--compressed');
+
+    // Add TLS options based on configuration
+    if (fingerprint.tls.echGrease) {
+      args.push('--ech', 'grease');
+    }
+    if (fingerprint.tls.tlsv12) {
+      args.push('--tlsv1.2');
+    }
+    if (fingerprint.tls.alps) {
+      args.push('--alps');
+    }
+    if (fingerprint.tls.tlsPermuteExtensions) {
+      args.push('--tls-permute-extensions');
+    }
+    if (fingerprint.tls.certCompression !== 'none') {
+      args.push('--cert-compression', fingerprint.tls.certCompression);
+    }
+    if (fingerprint.tls.tlsGrease) {
+      args.push('--tls-grease');
+    }
+    if (fingerprint.tls.tlsUseNewAlpsCodepoint) {
+      args.push('--tls-use-new-alps-codepoint');
+    }
+    if (fingerprint.tls.tlsSignedCertTimestamps) {
+      args.push('--tls-signed-cert-timestamps');
+    }
+
+    // Additional TLS options
+    if (fingerprint.tls.signatureHashes) {
+      args.push('--signature-hashes', fingerprint.tls.signatureHashes);
+    }
+    if (fingerprint.tls.tlsExtensionOrder) {
+      args.push('--tls-extension-order', fingerprint.tls.tlsExtensionOrder);
+    }
+    if (fingerprint.tls.tlsDelegatedCredentials) {
+      args.push('--tls-delegated-credentials', fingerprint.tls.tlsDelegatedCredentials);
+    }
+    if (fingerprint.tls.tlsRecordSizeLimit) {
+      args.push('--tls-record-size-limit', String(fingerprint.tls.tlsRecordSizeLimit));
+    }
+    if (fingerprint.tls.tlsKeySharesLimit) {
+      args.push('--tls-key-shares-limit', String(fingerprint.tls.tlsKeySharesLimit));
+    }
+    if (fingerprint.tls.http2PseudoHeadersOrder) {
+      args.push('--http2-pseudo-headers-order', fingerprint.tls.http2PseudoHeadersOrder);
+    }
+
+    // Safari-specific TLS options
+    if (fingerprint.tls.tlsv10) {
+      args.push('--tlsv1.0');
+    }
+    if (fingerprint.tls.noTlsSessionTicket) {
+      args.push('--no-tls-session-ticket');
+    }
+
+
 
     // Body
     if (options.body) {
@@ -487,8 +267,7 @@ export class CurlImpersonate {
    */
   private executeCurl(args: string[], url?: string): Promise<string> {
     return new Promise((resolve, reject) => {
-      const curlPath = join(this.binariesPath, 'curl_chrome99'); // Default binary
-      const child = spawn(curlPath, args, { 
+      const child = spawn(this.binaryPath, args, { 
         stdio: ['pipe', 'pipe', 'pipe'],
         shell: false
       });
@@ -508,6 +287,13 @@ export class CurlImpersonate {
         if (code === 0) {
           // Debug logging with file saving
           debugLogger.logRawCurlWithFile(args, stdout, stderr, 'curl-success', url);
+          
+          // Extract request headers from stderr (verbose output)
+          const requestHeaders = this.extractRequestHeadersFromStderr(stderr || '');
+          if (Object.keys(requestHeaders).length > 0 && url) {
+            debugLogger.logRequestHeadersWithFile(url, requestHeaders, 'curl-request');
+          }
+          
           resolve(stdout);
         } else {
           // Debug logging with file saving
@@ -563,7 +349,7 @@ export class CurlImpersonate {
     
     const [statusCode, httpVersion, size, timeTotal, effectiveUrl] = statusLine.split('|');
     
-    // Step 2: Parse header sections and find body
+    // Step 2: Parse response header sections and find body
     const headers: Record<string, string> = {};
     let bodyLines: string[] = [];
     let headerSectionCount = 0;
@@ -738,31 +524,25 @@ export class CurlImpersonate {
   }
 
   /**
-   * Check if a header is browser-specific and should be handled by curl-impersonate binary
+   * Extract request headers from stderr (verbose curl output)
    */
-  private isBrowserSpecificHeader(headerName: string): boolean {
-    const browserHeaders = [
-      'user-agent',
-      'sec-ch-ua',
-      'sec-ch-ua-mobile',
-      'sec-ch-ua-platform',
-      'sec-ch-ua-platform-version',
-      'sec-ch-ua-model',
-      'sec-ch-ua-arch',
-      'sec-ch-ua-bitness',
-      'sec-ch-ua-full-version',
-      'sec-ch-ua-full-version-list',
-      'accept',
-      'accept-language',
-      'accept-encoding',
-      'upgrade-insecure-requests',
-      'sec-fetch-dest',
-      'sec-fetch-mode',
-      'sec-fetch-site',
-      'sec-fetch-user'
-    ];
+  private extractRequestHeadersFromStderr(stderr: string): Record<string, string> {
+    const headers: Record<string, string> = {};
+    const lines = stderr.split('\n');
     
-    return browserHeaders.includes(headerName.toLowerCase());
+    for (const line of lines) {
+      if (line.startsWith('>')) {
+        const headerLine = line.substring(1).trim(); // Remove the '>' prefix
+        if (headerLine.includes(':')) {
+          const colonIndex = headerLine.indexOf(':');
+          const key = headerLine.substring(0, colonIndex).trim();
+          const value = headerLine.substring(colonIndex + 1).trim();
+          headers[key] = value;
+        }
+      }
+    }
+    
+    return headers;
   }
 
   /**
