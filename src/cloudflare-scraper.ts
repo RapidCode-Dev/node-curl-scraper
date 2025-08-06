@@ -284,15 +284,12 @@ export class CloudflareScraper {
 
   private isCloudflareBlocked(response: HttpResponse): boolean {
     return response.statusCode === 403 || 
-           response.statusCode === 429 ||
-           response.body.includes('cloudflare') ||
-           response.body.includes('challenge');
+           response.statusCode === 429;
   }
 
   private isCloudflareChallenge(response: HttpResponse): boolean {
-    return this.isCloudflareBlocked(response) ||
-           response.body.includes('cf-browser-verification') ||
-           response.body.includes('cf_challenge');
+    // TODO: Implement Cloudflare challenge detection
+    return false;
   }
 
   private handleCloudflareChallenge(response: HttpResponse, session: ScrapingSession): CloudflareError {
