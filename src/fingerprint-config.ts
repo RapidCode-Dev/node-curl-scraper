@@ -11,9 +11,9 @@ export interface FingerprintConfig {
     'Accept': string;
     'Accept-Language': string;
     'Accept-Encoding': string;
-    'sec-ch-ua': string;
-    'sec-ch-ua-mobile': string;
-    'sec-ch-ua-platform': string;
+    'Sec-Ch-Ua': string;
+    'Sec-Ch-Ua-Mobile': string;
+    'Sec-Ch-Ua-Platform': string;
     'Upgrade-Insecure-Requests': string;
     'Sec-Fetch-Site': string;
     'Sec-Fetch-Mode': string;
@@ -63,9 +63,9 @@ export const FINGERPRINT_CONFIGS: Record<string, FingerprintConfig> = {
       'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
       'Accept-Language': 'en-US,en;q=0.9',
       'Accept-Encoding': 'gzip, deflate, br, zstd',
-      'sec-ch-ua': '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
-      'sec-ch-ua-mobile': '?0',
-      'sec-ch-ua-platform': '"Android"',
+      'Sec-Ch-Ua': '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
+      'Sec-Ch-Ua-Mobile': '?0',
+      'Sec-Ch-Ua-Platform': '"Android"',
       'Upgrade-Insecure-Requests': '1',
       'Sec-Fetch-Site': 'none',
       'Sec-Fetch-Mode': 'navigate',
@@ -102,9 +102,9 @@ export const FINGERPRINT_CONFIGS: Record<string, FingerprintConfig> = {
       'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
       'Accept-Language': 'en-US,en;q=0.9',
       'Accept-Encoding': 'gzip, deflate, br, zstd',
-      'sec-ch-ua': '"Chromium";v="136", "Google Chrome";v="136", "Not.A/Brand";v="99"',
-      'sec-ch-ua-mobile': '?0',
-      'sec-ch-ua-platform': '"macOS"',
+      'Sec-Ch-Ua': '"Chromium";v="136", "Google Chrome";v="136", "Not.A/Brand";v="99"',
+      'Sec-Ch-Ua-Mobile': '?0',
+      'Sec-Ch-Ua-Platform': '"macOS"',
       'Upgrade-Insecure-Requests': '1',
       'Sec-Fetch-Site': 'none',
       'Sec-Fetch-Mode': 'navigate',

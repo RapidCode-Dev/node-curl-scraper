@@ -9,9 +9,9 @@ export interface FingerprintConfig {
         'Accept': string;
         'Accept-Language': string;
         'Accept-Encoding': string;
-        'sec-ch-ua': string;
-        'sec-ch-ua-mobile': string;
-        'sec-ch-ua-platform': string;
+        'Sec-Ch-Ua': string;
+        'Sec-Ch-Ua-Mobile': string;
+        'Sec-Ch-Ua-Platform': string;
         'Upgrade-Insecure-Requests': string;
         'Sec-Fetch-Site': string;
         'Sec-Fetch-Mode': string;
