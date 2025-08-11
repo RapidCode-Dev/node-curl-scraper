@@ -1,6 +1,6 @@
 {
   "name": "curl-scraping",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Advanced web scraping tool using curl-impersonate with Cloudflare bypass, proxy management, and multi-threading support",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
