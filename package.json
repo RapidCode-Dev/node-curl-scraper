@@ -1,6 +1,6 @@
 {
   "name": "curl-scraping",
-  "version": "1.0.3",
+  "version": "1.1.0",
   "description": "Advanced web scraping tool using curl-impersonate with Cloudflare bypass, proxy management, and multi-threading support",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -43,6 +43,7 @@
   },
   "dependencies": {
     "child_process": "^1.0.2",
-    "node-html-parser": "7.0.1"
+    "node-html-parser": "7.0.1",
+    "puppeteer-core": "24.16.1"
   }
 }

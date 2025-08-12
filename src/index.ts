@@ -14,6 +14,21 @@ export type {
     CloudflareScraperConfig
 } from './cloudflare-scraper';
 
+// Export the Puppeteer integration utilities
+export {
+    createCurlImpersonate,
+    handleRequestWithCurl,
+    createRequestInterceptor,
+    setupCurlInterception,
+    shouldInterceptUrl,
+    createSelectiveRequestInterceptor,
+    exampleUsage
+} from './puppeteer-scraper';
+export type {
+    CurlInterceptionOptions,
+    InterceptedResponse
+} from './puppeteer-scraper';
+
 // Export debug utilities
 export { debugLogger } from './debug';
 export type { DebugConfig } from './debug';

@@ -136,8 +136,16 @@ export class CurlImpersonate {
 
         // Add fingerprint headers (skip if overridden by custom headers)
         for (const [key, value] of Object.entries(fingerprint.headers)) {
-            if (value && (!options.headers || !(key in options.headers))) { // Only add if not overridden
-                args.push('-H', `${key}: ${value}`);
+            if (value) {
+                // Check if this header is overridden by custom headers (case-insensitive)
+                const isOverridden = options.headers && 
+                    Object.keys(options.headers).some(customKey => 
+                        customKey.toLowerCase() === key.toLowerCase()
+                    );
+                
+                if (!isOverridden) {
+                    args.push('-H', `${key}: ${value}`);
+                }
             }
         }
 
