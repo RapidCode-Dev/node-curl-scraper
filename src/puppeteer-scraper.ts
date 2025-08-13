@@ -4,7 +4,7 @@ import { HTTPRequest, HTTPResponse } from 'puppeteer-core';
 import { CurlImpersonate } from './curl-impersonate';
 import { RequestOptions, HttpResponse } from './types';
 
-export interface CurlInterceptionOptions {
+export interface CurlInterceptionOptions extends RequestOptions {
     fingerprintName?: string;
     enableDebug?: boolean;
     timeout?: number;
@@ -59,7 +59,6 @@ export async function handleRequestWithCurl(
             method,
             headers,
             body: postData,
-            timeout: options.timeout,
             ...options
         };
 
