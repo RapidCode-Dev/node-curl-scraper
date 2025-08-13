@@ -35,7 +35,6 @@ async function handleRequestWithCurl(request, curlImpersonate, options = {}) {
             method,
             headers,
             body: postData,
-            timeout: options.timeout,
             ...options
         };
         // Execute request using curl-impersonate

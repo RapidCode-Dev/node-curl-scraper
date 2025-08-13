@@ -1,6 +1,7 @@
 import { HTTPRequest } from 'puppeteer-core';
 import { CurlImpersonate } from './curl-impersonate';
-export interface CurlInterceptionOptions {
+import { RequestOptions } from './types';
+export interface CurlInterceptionOptions extends RequestOptions {
     fingerprintName?: string;
     enableDebug?: boolean;
     timeout?: number;
