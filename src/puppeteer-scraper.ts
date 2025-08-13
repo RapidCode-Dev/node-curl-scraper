@@ -2,7 +2,7 @@
 // This provides the HTTPRequest and HTTPResponse types for type safety
 import { HTTPRequest, HTTPResponse } from 'puppeteer-core';
 import { CurlImpersonate } from './curl-impersonate';
-import { RequestOptions, HttpResponse } from './types';
+import { RequestOptions, HttpResponse, CurlImpersonateConfig } from './types';
 
 export interface CurlInterceptionOptions extends RequestOptions {
     fingerprintName?: string;
@@ -28,9 +28,8 @@ export type PuppeteerResponse = {
 /**
  * Create a curl-impersonate instance for use in Puppeteer request interception
  */
-export function createCurlImpersonate(options: CurlInterceptionOptions = {}): CurlImpersonate {
+export function createCurlImpersonate(options: CurlImpersonateConfig = {}): CurlImpersonate {
     return new CurlImpersonate({
-        defaultTimeout: options.timeout || 30000,
         ...options
     });
 }
@@ -122,32 +121,6 @@ export function createRequestInterceptor(
     };
 }
 
-/**
- * Set up request interception on a Puppeteer page with curl-impersonate
- * This is a convenience function that handles the complete setup
- */
-export async function setupCurlInterception(
-    page: { 
-        setRequestInterception: (enabled: boolean) => Promise<void>; 
-        on: (event: string, handler: (request: HTTPRequest) => void) => any;
-    },
-    options: CurlInterceptionOptions = {}
-): Promise<CurlImpersonate> {
-    const curlImpersonate = createCurlImpersonate(options);
-    
-    // Enable request interception
-    await page.setRequestInterception(true);
-    
-    // Set up the request handler
-    const interceptor = createRequestInterceptor(curlImpersonate, options);
-    page.on('request', interceptor);
-    
-    if (options.enableDebug) {
-        console.log('[CurlInterception] Request interception setup complete');
-    }
-    
-    return curlImpersonate;
-}
 
 /**
  * Utility function to check if a URL should be intercepted

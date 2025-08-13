@@ -3,7 +3,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.createCurlImpersonate = createCurlImpersonate;
 exports.handleRequestWithCurl = handleRequestWithCurl;
 exports.createRequestInterceptor = createRequestInterceptor;
-exports.setupCurlInterception = setupCurlInterception;
 exports.shouldInterceptUrl = shouldInterceptUrl;
 exports.createSelectiveRequestInterceptor = createSelectiveRequestInterceptor;
 exports.exampleUsage = exampleUsage;
@@ -13,7 +12,6 @@ const curl_impersonate_1 = require("./curl-impersonate");
  */
 function createCurlImpersonate(options = {}) {
     return new curl_impersonate_1.CurlImpersonate({
-        defaultTimeout: options.timeout || 30000,
         ...options
     });
 }
@@ -82,22 +80,6 @@ function createRequestInterceptor(curlImpersonate, options = {}) {
             await request.abort();
         }
     };
-}
-/**
- * Set up request interception on a Puppeteer page with curl-impersonate
- * This is a convenience function that handles the complete setup
- */
-async function setupCurlInterception(page, options = {}) {
-    const curlImpersonate = createCurlImpersonate(options);
-    // Enable request interception
-    await page.setRequestInterception(true);
-    // Set up the request handler
-    const interceptor = createRequestInterceptor(curlImpersonate, options);
-    page.on('request', interceptor);
-    if (options.enableDebug) {
-        console.log('[CurlInterception] Request interception setup complete');
-    }
-    return curlImpersonate;
 }
 /**
  * Utility function to check if a URL should be intercepted

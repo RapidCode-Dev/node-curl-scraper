@@ -19,7 +19,6 @@ export {
     createCurlImpersonate,
     handleRequestWithCurl,
     createRequestInterceptor,
-    setupCurlInterception,
     shouldInterceptUrl,
     createSelectiveRequestInterceptor,
     exampleUsage
