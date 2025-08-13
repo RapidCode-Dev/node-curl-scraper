@@ -60,6 +60,7 @@ export async function handleRequestWithCurl(
             headers,
             body: postData,
             timeout: options.timeout,
+            ...options
         };
 
         // Execute request using curl-impersonate
@@ -83,7 +84,7 @@ export async function handleRequestWithCurl(
 
     } catch (error) {
         if (options.enableDebug) {
-            console.log(`[CurlInterception] Request failed: ${error}`);
+            console.log(`[CurlInterception] Request failed:`, error);
         }
         
         // Return error response

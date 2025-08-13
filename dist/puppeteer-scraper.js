@@ -36,6 +36,7 @@ async function handleRequestWithCurl(request, curlImpersonate, options = {}) {
             headers,
             body: postData,
             timeout: options.timeout,
+            ...options
         };
         // Execute request using curl-impersonate
         const response = await curlImpersonate.request(url, requestOptions, options.fingerprintName);
@@ -52,7 +53,7 @@ async function handleRequestWithCurl(request, curlImpersonate, options = {}) {
     }
     catch (error) {
         if (options.enableDebug) {
-            console.log(`[CurlInterception] Request failed: ${error}`);
+            console.log(`[CurlInterception] Request failed:`, error);
         }
         // Return error response
         throw error;
