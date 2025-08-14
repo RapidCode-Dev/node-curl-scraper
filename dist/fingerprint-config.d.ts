@@ -12,7 +12,7 @@ export interface FingerprintConfig {
         'Sec-Ch-Ua': string;
         'Sec-Ch-Ua-Mobile': string;
         'Sec-Ch-Ua-Platform': string;
-        'Upgrade-Insecure-Requests': string;
+        'Upgrade-Insecure-Requests'?: string;
         'Sec-Fetch-Site': string;
         'Sec-Fetch-Mode': string;
         'Sec-Fetch-User'?: string;

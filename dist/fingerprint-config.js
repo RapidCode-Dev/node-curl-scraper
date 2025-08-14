@@ -132,7 +132,6 @@ exports.FINGERPRINT_CONFIGS = {
             'Sec-Ch-Ua': '"Chromium";v="127", "Google Chrome";v="127", "Not-A.Brand";v="99"',
             'Sec-Ch-Ua-Mobile': '?0',
             'Sec-Ch-Ua-Platform': '"macOS"',
-            'Upgrade-Insecure-Requests': '1',
             'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
             'Sec-Fetch-Site': 'none',
