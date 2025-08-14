@@ -127,21 +127,40 @@ export class CurlImpersonate {
             args.push('-X', options.method);
         }
 
+        // Normalize all headers to lowercase: 
+        const toLower = (obj: Record<string, string> | string[]) => {
+            if (Array.isArray(obj)) {
+                return obj.map(item => item.toLowerCase());
+            }
+            return Object.fromEntries(Object.entries(obj).map(([key, value]) => [key.toLowerCase(), value]));
+        }
+
+        const normalizedHeaders = toLower(options.headers || {});
+        const normalizedFingerprintHeaders = toLower(fingerprint.headers);
+        const normalizedExplicitHeaders = toLower(options.explicitFingerprintHeaders || []) as string[];
+
+
         // Custom headers (can override fingerprint headers) - add first
         if (options.headers) {
-            for (const [key, value] of Object.entries(options.headers)) {
+            for (const [key, value] of Object.entries(normalizedHeaders)) {
                 args.push('-H', `${key}: ${value}`);
             }
         }
 
         // Add fingerprint headers (skip if overridden by custom headers)
-        for (const [key, value] of Object.entries(fingerprint.headers)) {
+        for (const [key, value] of Object.entries(normalizedFingerprintHeaders)) {
             if (value) {
                 // Check if this header is overridden by custom headers (case-insensitive)
-                const isOverridden = options.headers && 
-                    Object.keys(options.headers).some(customKey => 
-                        customKey.toLowerCase() === key.toLowerCase()
-                    );
+                const isOverridden = options.headers && Object.keys(normalizedHeaders).some(customKey => customKey === key);
+
+                // Explicit fingerprint headers
+                if (options.explicitFingerprintHeaders) {
+                    const isExplicit = normalizedExplicitHeaders.some(header => header === key);
+                    if (isExplicit) {
+                        args.push('-H', `${key}: ${value}`);
+                        continue;
+                    }
+                }
                 
                 if (!isOverridden) {
                     args.push('-H', `${key}: ${value}`);

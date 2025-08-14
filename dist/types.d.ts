@@ -73,6 +73,7 @@ export interface MultiThreadingConfig {
 export interface RequestOptions {
     method?: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' | 'HEAD' | 'OPTIONS';
     headers?: Record<string, string>;
+    explicitFingerprintHeaders?: string[];
     body?: string | Buffer;
     timeout?: number;
     followRedirects?: boolean;
