@@ -15,7 +15,7 @@ export interface FingerprintConfig {
         'Upgrade-Insecure-Requests': string;
         'Sec-Fetch-Site': string;
         'Sec-Fetch-Mode': string;
-        'Sec-Fetch-User': string;
+        'Sec-Fetch-User'?: string;
         'Sec-Fetch-Dest': string;
         'Priority'?: string;
         'TE'?: string;
