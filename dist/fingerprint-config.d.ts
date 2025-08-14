@@ -49,4 +49,5 @@ export declare const FINGERPRINT_CONFIGS: Record<string, FingerprintConfig>;
 export declare function getFingerprintConfig(name: string): FingerprintConfig | null;
 export declare function getAvailableFingerprints(): string[];
 export declare function findFingerprintByBrowser(browser: string, version?: string, os?: string): FingerprintConfig | null;
+export declare function findFingerprintsByBrowser(browser: string, version?: string, os?: string): FingerprintConfig[];
 //# sourceMappingURL=fingerprint-config.d.ts.map

@@ -4,6 +4,7 @@ exports.FINGERPRINT_CONFIGS = void 0;
 exports.getFingerprintConfig = getFingerprintConfig;
 exports.getAvailableFingerprints = getAvailableFingerprints;
 exports.findFingerprintByBrowser = findFingerprintByBrowser;
+exports.findFingerprintsByBrowser = findFingerprintsByBrowser;
 // Predefined fingerprint configurations
 exports.FINGERPRINT_CONFIGS = {
     'chrome131-android': {
@@ -134,5 +135,13 @@ function findFingerprintByBrowser(browser, version, os) {
         const osMatch = !os || config.os === os;
         return browserMatch && versionMatch && osMatch;
     }) || null;
+}
+function findFingerprintsByBrowser(browser, version, os) {
+    return Object.values(exports.FINGERPRINT_CONFIGS).filter(config => {
+        const browserMatch = config.browser === browser;
+        const versionMatch = !version || config.version === version;
+        const osMatch = !os || config.os === os;
+        return browserMatch && versionMatch && osMatch;
+    });
 }
 //# sourceMappingURL=fingerprint-config.js.map

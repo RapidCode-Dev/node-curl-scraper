@@ -17,6 +17,10 @@ export declare class CurlImpersonate {
      */
     findFingerprintByBrowser(browser: string, version?: string, os?: string): FingerprintConfig | null;
     /**
+     * Find fingerprint by browser, version, and OS
+     */
+    findFingerprintsByBrowser(browser: string, version?: string, os?: string): FingerprintConfig[];
+    /**
      * Make HTTP request with fingerprint configuration
      */
     request(url: string, options?: RequestOptions, fingerprintName?: string): Promise<HttpResponse>;

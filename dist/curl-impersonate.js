@@ -36,6 +36,12 @@ class CurlImpersonate {
         return (0, fingerprint_config_1.findFingerprintByBrowser)(browser, version, os);
     }
     /**
+     * Find fingerprint by browser, version, and OS
+     */
+    findFingerprintsByBrowser(browser, version, os) {
+        return (0, fingerprint_config_1.findFingerprintsByBrowser)(browser, version, os);
+    }
+    /**
      * Make HTTP request with fingerprint configuration
      */
     async request(url, options = {}, fingerprintName) {

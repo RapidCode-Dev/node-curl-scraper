@@ -13,7 +13,8 @@ import {
     FingerprintConfig,
     getFingerprintConfig,
     getAvailableFingerprints,
-    findFingerprintByBrowser
+    findFingerprintByBrowser,
+    findFingerprintsByBrowser
 } from './fingerprint-config';
 
 export class CurlImpersonate {
@@ -54,6 +55,17 @@ export class CurlImpersonate {
         os?: string
     ): FingerprintConfig | null {
         return findFingerprintByBrowser(browser, version, os);
+    }
+
+    /**
+     * Find fingerprint by browser, version, and OS
+     */
+    findFingerprintsByBrowser(
+        browser: string,
+        version?: string,
+        os?: string
+    ): FingerprintConfig[] {
+        return findFingerprintsByBrowser(browser, version, os);
     }
 
     /**

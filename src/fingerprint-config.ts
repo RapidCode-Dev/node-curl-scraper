@@ -190,3 +190,17 @@ export function findFingerprintByBrowser(
         return browserMatch && versionMatch && osMatch;
     }) || null;
 } 
+
+export function findFingerprintsByBrowser(
+    browser: string,
+    version?: string,
+    os?: string
+): FingerprintConfig[] {
+    return Object.values(FINGERPRINT_CONFIGS).filter(config => {
+        const browserMatch = config.browser === browser;
+        const versionMatch = !version || config.version === version;
+        const osMatch = !os || config.os === os;
+
+        return browserMatch && versionMatch && osMatch;
+    });
+}
