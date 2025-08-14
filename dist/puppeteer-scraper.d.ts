@@ -2,12 +2,8 @@ import { HTTPRequest } from 'puppeteer-core';
 import { CurlImpersonate } from './curl-impersonate';
 import { RequestOptions, CurlImpersonateConfig } from './types';
 export interface CurlInterceptionOptions extends RequestOptions {
-    fingerprintName?: string;
-    fingerprintPlatform?: 'desktop' | 'mobile';
-    fingerprintOs?: 'windows' | 'macos' | 'linux' | 'android' | 'ios';
-    fingerprintBrowser?: 'chrome' | 'firefox' | 'safari' | 'edge';
     enableDebug?: boolean;
-    timeout?: number;
+    fingerprintName?: string;
 }
 export interface InterceptedResponse {
     status: number;
