@@ -122,7 +122,16 @@ exports.FINGERPRINT_CONFIGS = {
     }
 };
 function getFingerprintConfig(name) {
-    return exports.FINGERPRINT_CONFIGS[name] || null;
+    let fingerprint = exports.FINGERPRINT_CONFIGS[name] || null;
+    if (!fingerprint) {
+        // Try to find by name: 
+        const fingerprintValues = Object.values(exports.FINGERPRINT_CONFIGS);
+        const found = fingerprintValues.find(config => config.name.toLowerCase() === name.toLowerCase());
+        if (found) {
+            fingerprint = found;
+        }
+    }
+    return fingerprint;
 }
 function getAvailableFingerprints() {
     return Object.keys(exports.FINGERPRINT_CONFIGS);

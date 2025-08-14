@@ -168,7 +168,18 @@ export const FINGERPRINT_CONFIGS: Record<string, FingerprintConfig> = {
 };
 
 export function getFingerprintConfig(name: string): FingerprintConfig | null {
-    return FINGERPRINT_CONFIGS[name] || null;
+    let fingerprint = FINGERPRINT_CONFIGS[name] || null;
+
+    if (!fingerprint) {
+        // Try to find by name: 
+        const fingerprintValues = Object.values(FINGERPRINT_CONFIGS);
+        const found = fingerprintValues.find(config => config.name.toLowerCase() === name.toLowerCase());
+        if (found) {
+            fingerprint = found;
+        }
+    }
+
+    return fingerprint as FingerprintConfig | null;
 }
 
 export function getAvailableFingerprints(): string[] {
@@ -189,7 +200,7 @@ export function findFingerprintByBrowser(
 
         return browserMatch && versionMatch && osMatch;
     }) || null;
-} 
+}
 
 export function findFingerprintsByBrowser(
     browser: string,
