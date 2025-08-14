@@ -218,10 +218,10 @@ export const FINGERPRINT_CONFIGS: Record<string, FingerprintConfig> = {
             'Sec-Ch-Ua': '"Chromium";v="136", "Google Chrome";v="136", "Not.A/Brand";v="99"',
             'Sec-Ch-Ua-Mobile': '?0',
             'Sec-Ch-Ua-Platform': '"macOS"',
-            'Upgrade-Insecure-Requests': '1',
+            //'Upgrade-Insecure-Requests': '1',
             'Sec-Fetch-Site': 'none',
             'Sec-Fetch-Mode': 'navigate',
-            'Sec-Fetch-User': '?1',
+            //'Sec-Fetch-User': '?1',
             'Sec-Fetch-Dest': 'document',
             'Priority': 'u=0, i'
         },
